@@ -7,24 +7,18 @@ import streamlit as st
 from scipy.spatial import KDTree
 
 # ==========================================
-# 1. CẤU HÌNH TRANG & TỐI ƯU VIEWPORT SINGLE-PAGE
+# 1. CẤU HÌNH TRANG (THU GỌN CHUẨN DESKTOP)
 # ==========================================
 st.set_page_config(
     page_title="LTE RF Design Tool",
     page_icon="📡",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Custom CSS ép toàn bộ trang vừa khít 1 màn hình (No Page Scroll)
-st.markdown(
-    "",
-    unsafe_allow_html=True
-)
-
-# Header thu nhỏ gọn gàng
-st.markdown("### 📡 LTE RF NETWORK DESIGN AUTOMATION")
-st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI, RSI, Azimuth, M-Tilt & Directional E-Tilt")
+# Header
+st.title("📡 LTE RF DESIGN AUTOMATION TOOL")
+st.caption("Ericsson RAN Systems - Automatic Allocation for TAC, PCI, RSI, Azimuth, M-Tilt & Directional E-Tilt")
 st.divider()
 
 # ==========================================
@@ -119,260 +113,261 @@ def get_directional_nearest_distance(site_lat, site_lon, cell_azimuth, neighbor_
     return max(np.min(dists), 100.0)
 
 # ==========================================
-# 3. SIDEBAR & COMPACT INPUT CONTROLS
+# 3. GIAO DIỆN CHÍNH (3 KHỐI DỌC)
 # ==========================================
 
-with st.sidebar:
-    st.markdown("#### 📂 1. Input CSV Files")
-    rim_file = st.file_uploader("RIM.csv (Physical)", type=["csv"])
-    config_file = st.file_uploader("Config.csv (Logic)", type=["csv"])
-    input_file = st.file_uploader("Input.csv (New Sites)", type=["csv"])
-    
-    st.divider()
-    st.markdown("#### ⚙️ 2. Design Parameters")
-    pci_min_dist = st.number_input("PCI Range (m)", min_value=1000, max_value=50000, value=8000, step=500)
-    rsi_min_dist = st.number_input("RSI Range (m)", min_value=1000, max_value=50000, value=8000, step=500)
-    
-    st.divider()
-    execute_btn = st.button("🚀 Run RF Design", type="primary", use_container_width=True)
+# KHỐI 1: FILE INPUTS
+st.subheader("📁 1. File Inputs")
+col_f1, col_f2, col_f3 = st.columns(3)
 
-# ==========================================
-# 4. MAIN COMPACT PROCESSING ENGINE
-# ==========================================
+with col_f1:
+    rim_file = st.file_uploader("RIM.csv (Physical)", type=["csv"], key="rim")
+with col_f2:
+    config_file = st.file_uploader("Config.csv (Logic)", type=["csv"], key="config")
+with col_f3:
+    input_file = st.file_uploader("Input.csv (New Sites)", type=["csv"], key="input")
 
-main_container = st.container()
+st.divider()
 
-with main_container:
-    if execute_btn:
-        if not rim_file or not config_file or not input_file:
-            st.error("⚠️ Vui lòng nạp đủ 3 file: RIM.csv, Config.csv và Input.csv trên thanh bên trái.")
-        else:
-            start_time = time.time()
-            logs = []
-            
-            def add_log(msg):
-                timestamp = time.strftime("[%H:%M:%S] ")
-                logs.append(timestamp + msg)
+# KHỐI 2: DESIGN PARAMETERS & CONTROL
+st.subheader("⚙️ 2. Design Parameters & Control")
+col_p1, col_p2, col_p3 = st.columns([2, 2, 2])
 
-            status_box = st.status("⚙️ Đang thực thi quy hoạch...", expanded=True)
-            progress_bar = st.progress(0)
+with col_p1:
+    pci_min_dist = st.number_input("PCI Reuse Distance Range (m)", min_value=1000, max_value=50000, value=8000, step=500)
+with col_p2:
+    rsi_min_dist = st.number_input("RSI Reuse Distance Range (m)", min_value=1000, max_value=50000, value=8000, step=500)
+with col_p3:
+    st.write("")
+    execute_btn = st.button("🚀 Execute RF Design", type="primary", use_container_width=True)
 
-            try:
-                status_box.write("Đang đọc file dữ liệu...")
-                df_rim = pd.read_csv(rim_file)
-                df_config = pd.read_csv(config_file)
-                df_input = pd.read_csv(input_file)
+st.divider()
 
-                df_rim.columns = df_rim.columns.str.strip()
-                df_config.columns = df_config.columns.str.strip()
-                df_input.columns = df_input.columns.str.strip()
+# KHỐI 3: PROCESS EXECUTION LOGS & RESULTS
+st.subheader("📜 3. Execution Logs & Results")
 
-                add_log(f"Đọc dữ liệu thành công: RIM ({len(df_rim)} dòng), Config ({len(df_config)} dòng), Input ({len(df_input)} dòng).")
-                progress_bar.progress(10)
-
-                df_existing = pd.merge(df_rim, df_config[['Cellname', 'TAC', 'PCI', 'RSI']], on='Cellname', how='inner')
-                add_log(f"Tổng hợp thành công {len(df_existing)} cell hiện hữu.")
-                progress_bar.progress(20)
-
-                existing_coords_cart = latlon_to_cartesian(df_existing['Lat'].values, df_existing['Lon'].values)
-                kdtree_existing = KDTree(existing_coords_cart)
-
-                assigned_pci_list = np.column_stack((existing_coords_cart, df_existing['PCI'].values))
-                assigned_rsi_list = np.column_stack((existing_coords_cart, df_existing['RSI'].values))
-
-                pci_groups = [list(range(i, i+3)) for i in range(0, 448, 3)]
-                rsi_groups = [[r, (r+6)%643, (r+12)%643] for r in range(0, 643-12, 6)]
-
-                unique_sites = df_input['Sitename'].unique()
-                total_sites = len(unique_sites)
-                add_log(f"Bắt đầu quy hoạch cho {total_sites} site mới...")
-
-                output_rows = []
-
-                for idx, site_name in enumerate(unique_sites):
-                    status_box.write(f"Đang tính toán site {idx+1}/{total_sites}: {site_name}")
-                    site_cells = df_input[df_input['Sitename'] == site_name].copy()
-                    site_lat = site_cells['Lat'].iloc[0]
-                    site_lon = site_cells['Lon'].iloc[0]
-                    site_cart = latlon_to_cartesian(site_lat, site_lon)[0]
-
-                    _, nearest_idx = kdtree_existing.query(site_cart)
-                    assigned_tac = df_existing.iloc[nearest_idx]['TAC']
-
-                    nearest_site_dist = haversine_np(
-                        site_lon, site_lat, 
-                        df_existing.iloc[nearest_idx]['Lon'], df_existing.iloc[nearest_idx]['Lat']
-                    )
-                    nearest_site_dist = max(nearest_site_dist, 100.0)
-
-                    neighbor_indices = kdtree_existing.query_ball_point(site_cart, r=5000)
-                    if len(neighbor_indices) > 0:
-                        n_lats = df_existing.iloc[neighbor_indices]['Lat'].values
-                        n_lons = df_existing.iloc[neighbor_indices]['Lon'].values
-                        n_azs = df_existing.iloc[neighbor_indices]['Azimuth'].values
-                    else:
-                        n_lats, n_lons, n_azs = np.array([]), np.array([]), np.array([])
-
-                    selected_pci_group = None
-                    max_min_pci_dist = -1
-                    best_fallback_pci_group = pci_groups[0]
-
-                    for group in pci_groups:
-                        min_dist_for_this_group = 1e9
-                        conflict = False
-                        for pci_val in group:
-                            matched_pcis = assigned_pci_list[assigned_pci_list[:, 3] == pci_val]
-                            if len(matched_pcis) > 0:
-                                dists = haversine_np(
-                                    site_lon, site_lat, 
-                                    np.degrees(np.arctan2(matched_pcis[:,1], matched_pcis[:,0])), 
-                                    np.degrees(np.arcsin(matched_pcis[:,2]/6371000.0))
-                                )
-                                current_min_d = np.min(dists)
-                                if current_min_d < min_dist_for_this_group:
-                                    min_dist_for_this_group = current_min_d
-                                if current_min_d < pci_min_dist:
-                                    conflict = True
-                            else:
-                                min_dist_for_this_group = 1e9
-
-                        if min_dist_for_this_group > max_min_pci_dist:
-                            max_min_pci_dist = min_dist_for_this_group
-                            best_fallback_pci_group = group
-
-                        if not conflict:
-                            selected_pci_group = group
-                            break
-
-                    if selected_pci_group is None:
-                        selected_pci_group = best_fallback_pci_group
-                        add_log(f"[WARNING] Site {site_name}: Hết PCI đạt chuẩn {pci_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_pci_dist)}m")
-
-                    selected_rsi_group = None
-                    max_min_rsi_dist = -1
-                    best_fallback_rsi_group = rsi_groups[0]
-
-                    for group in rsi_groups:
-                        min_dist_for_this_group = 1e9
-                        conflict = False
-                        for rsi_val in group:
-                            matched_rsis = assigned_rsi_list[assigned_rsi_list[:, 3] == rsi_val]
-                            if len(matched_rsis) > 0:
-                                dists = haversine_np(
-                                    site_lon, site_lat, 
-                                    np.degrees(np.arctan2(matched_rsis[:,1], matched_rsis[:,0])), 
-                                    np.degrees(np.arcsin(matched_rsis[:,2]/6371000.0))
-                                )
-                                current_min_d = np.min(dists)
-                                if current_min_d < min_dist_for_this_group:
-                                    min_dist_for_this_group = current_min_d
-                                if current_min_d < rsi_min_dist:
-                                    conflict = True
-                            else:
-                                min_dist_for_this_group = 1e9
-
-                        if min_dist_for_this_group > max_min_rsi_dist:
-                            max_min_rsi_dist = min_dist_for_this_group
-                            best_fallback_rsi_group = group
-
-                        if not conflict:
-                            selected_rsi_group = group
-                            break
-
-                    if selected_rsi_group is None:
-                        selected_rsi_group = best_fallback_rsi_group
-                        add_log(f"[WARNING] Site {site_name}: Hết RSI đạt chuẩn {rsi_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_rsi_dist)}m")
-
-                    site_assigned_azs = []
-                    for cell_idx in range(min(3, len(site_cells))):
-                        cell_row = site_cells.iloc[cell_idx].to_dict()
-
-                        opt_azimuth = calculate_optimum_azimuth(
-                            site_lat, site_lon, n_lats, n_lons, n_azs, 
-                            sector_idx=cell_idx,
-                            assigned_site_azimuths=site_assigned_azs
-                        )
-                        site_assigned_azs.append(opt_azimuth)
-
-                        m_tilt = 2.0
-                        ant_height = float(cell_row.get('Height', 30.0))
-
-                        cell_directional_dist = get_directional_nearest_distance(
-                            site_lat, site_lon, opt_azimuth, n_lats, n_lons, default_dist=nearest_site_dist
-                        )
-                        
-                        d_coverage = (2.0 / 3.0) * cell_directional_dist
-                        total_tilt = math.degrees(math.atan(ant_height / d_coverage))
-                        e_tilt = max(0, int(round(total_tilt - m_tilt)))
-
-                        cell_row['TAC'] = int(assigned_tac)
-                        cell_row['PCI'] = int(selected_pci_group[cell_idx])
-                        cell_row['RSI'] = int(selected_rsi_group[cell_idx])
-                        cell_row['Azimuth'] = int(opt_azimuth)
-                        cell_row['M-Tilt'] = int(m_tilt)
-                        cell_row['E-Tilt'] = int(e_tilt)
-
-                        output_rows.append(cell_row)
-
-                        assigned_pci_list = np.vstack([assigned_pci_list, [*site_cart, cell_row['PCI']]])
-                        assigned_rsi_list = np.vstack([assigned_rsi_list, [*site_cart, cell_row['RSI']]])
-
-                    progress = 20 + int(((idx + 1) / total_sites) * 70)
-                    progress_bar.progress(progress)
-
-                df_output = pd.DataFrame(output_rows)
-                progress_bar.progress(100)
-                elapsed_time = round(time.time() - start_time, 2)
-                
-                add_log("="*50)
-                add_log(f"THÀNH CÔNG: Hoàn thành quy hoạch cho {len(output_rows)} cells ({total_sites} sites) trong {elapsed_time}s.")
-
-                status_box.update(label="✅ Hoàn tất quy hoạch!", state="complete", expanded=False)
-                st.session_state["output_df"] = df_output
-                st.session_state["logs"] = "\n".join(logs)
-                st.session_state["exec_time"] = elapsed_time
-
-            except Exception as e:
-                status_box.update(label="❌ Lỗi tính toán!", state="error")
-                st.error(f"Lỗi: {str(e)}")
-
-    # ==========================================
-    # 5. FIXED-HEIGHT COMPACT DASHBOARD
-    # ==========================================
-    if "output_df" in st.session_state:
-        df_out = st.session_state["output_df"]
-        exec_t = st.session_state.get("exec_time", 0)
-        
-        # KPI Metric Cards
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Tổng Trạm Mới", f"{df_out['Sitename'].nunique()} Sites")
-        m2.metric("Tổng Số Cell", f"{len(df_out)} Cells")
-        m3.metric("E-Tilt Trung Bình", f"{df_out['E-Tilt'].mean():.1f}°")
-        m4.metric("Thời Gian Xử Lý", f"{exec_t}s")
-
-        st.divider()
-
-        col_left, col_right = st.columns([2, 1])
-
-        with col_left:
-            st.markdown("##### 📋 Output Data Preview")
-            # Cố định chiều cao 220px vừa khít khung nhìn
-            st.dataframe(df_out, use_container_width=True, height=220)
-
-            csv_buffer = io.StringIO()
-            df_out.to_csv(csv_buffer, index=False)
-            
-            st.download_button(
-                label="📥 Download Output_RF_Design.csv",
-                data=csv_buffer.getvalue().encode('utf-8-sig'),
-                file_name="Output_RF_Design.csv",
-                mime="text/csv",
-                type="primary"
-            )
-
-        with col_right:
-            st.markdown("##### 📜 Execution Logs")
-            # Cố định chiều cao khung Log vừa vặn
-            st.code(st.session_state.get("logs", ""), language="text")
+if execute_btn:
+    if not rim_file or not config_file or not input_file:
+        st.error("⚠️ Vui lòng chọn đầy đủ và chính xác cả 3 file CSV đầu vào!")
     else:
-        st.info("👈 Vui lòng tải lên 3 file CSV ở thanh bên trái và bấm **Run RF Design** để bắt đầu.")
+        start_time = time.time()
+        logs = []
+        
+        def add_log(msg):
+            timestamp = time.strftime("[%H:%M:%S] ")
+            logs.append(timestamp + msg)
+
+        status_box = st.status("⚙️ Bắt đầu tiến trình thiết kế RF...", expanded=True)
+        progress_bar = st.progress(0)
+
+        try:
+            status_box.write("Đang đọc các dữ liệu đầu vào...")
+            df_rim = pd.read_csv(rim_file)
+            df_config = pd.read_csv(config_file)
+            df_input = pd.read_csv(input_file)
+
+            df_rim.columns = df_rim.columns.str.strip()
+            df_config.columns = df_config.columns.str.strip()
+            df_input.columns = df_input.columns.str.strip()
+
+            add_log(f"Đọc dữ liệu: RIM ({len(df_rim)} rows), Config ({len(df_config)} rows), Input ({len(df_input)} rows).")
+            progress_bar.progress(10)
+
+            df_existing = pd.merge(df_rim, df_config[['Cellname', 'TAC', 'PCI', 'RSI']], on='Cellname', how='inner')
+            add_log(f"Tổng hợp thành công {len(df_existing)} cell hiện hữu.")
+            progress_bar.progress(20)
+
+            existing_coords_cart = latlon_to_cartesian(df_existing['Lat'].values, df_existing['Lon'].values)
+            kdtree_existing = KDTree(existing_coords_cart)
+
+            assigned_pci_list = np.column_stack((existing_coords_cart, df_existing['PCI'].values))
+            assigned_rsi_list = np.column_stack((existing_coords_cart, df_existing['RSI'].values))
+
+            pci_groups = [list(range(i, i+3)) for i in range(0, 448, 3)]
+            rsi_groups = [[r, (r+6)%643, (r+12)%643] for r in range(0, 643-12, 6)]
+
+            unique_sites = df_input['Sitename'].unique()
+            total_sites = len(unique_sites)
+            add_log(f"Bắt đầu quy hoạch cho {total_sites} site mới...")
+
+            output_rows = []
+
+            for idx, site_name in enumerate(unique_sites):
+                status_box.write(f"Đang tính toán site {idx+1}/{total_sites}: {site_name}")
+                site_cells = df_input[df_input['Sitename'] == site_name].copy()
+                site_lat = site_cells['Lat'].iloc[0]
+                site_lon = site_cells['Lon'].iloc[0]
+                site_cart = latlon_to_cartesian(site_lat, site_lon)[0]
+
+                _, nearest_idx = kdtree_existing.query(site_cart)
+                assigned_tac = df_existing.iloc[nearest_idx]['TAC']
+
+                nearest_site_dist = haversine_np(
+                    site_lon, site_lat, 
+                    df_existing.iloc[nearest_idx]['Lon'], df_existing.iloc[nearest_idx]['Lat']
+                )
+                nearest_site_dist = max(nearest_site_dist, 100.0)
+
+                neighbor_indices = kdtree_existing.query_ball_point(site_cart, r=5000)
+                if len(neighbor_indices) > 0:
+                    n_lats = df_existing.iloc[neighbor_indices]['Lat'].values
+                    n_lons = df_existing.iloc[neighbor_indices]['Lon'].values
+                    n_azs = df_existing.iloc[neighbor_indices]['Azimuth'].values
+                else:
+                    n_lats, n_lons, n_azs = np.array([]), np.array([]), np.array([])
+
+                # PCI Allocation
+                selected_pci_group = None
+                max_min_pci_dist = -1
+                best_fallback_pci_group = pci_groups[0]
+
+                for group in pci_groups:
+                    min_dist_for_this_group = 1e9
+                    conflict = False
+                    for pci_val in group:
+                        matched_pcis = assigned_pci_list[assigned_pci_list[:, 3] == pci_val]
+                        if len(matched_pcis) > 0:
+                            dists = haversine_np(
+                                site_lon, site_lat, 
+                                np.degrees(np.arctan2(matched_pcis[:,1], matched_pcis[:,0])), 
+                                np.degrees(np.arcsin(matched_pcis[:,2]/6371000.0))
+                            )
+                            current_min_d = np.min(dists)
+                            if current_min_d < min_dist_for_this_group:
+                                min_dist_for_this_group = current_min_d
+                            if current_min_d < pci_min_dist:
+                                conflict = True
+                        else:
+                            min_dist_for_this_group = 1e9
+
+                    if min_dist_for_this_group > max_min_pci_dist:
+                        max_min_pci_dist = min_dist_for_this_group
+                        best_fallback_pci_group = group
+
+                    if not conflict:
+                        selected_pci_group = group
+                        break
+
+                if selected_pci_group is None:
+                    selected_pci_group = best_fallback_pci_group
+                    add_log(f"[WARNING] Site {site_name}: Hết PCI đạt chuẩn {pci_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_pci_dist)}m")
+
+                # RSI Allocation
+                selected_rsi_group = None
+                max_min_rsi_dist = -1
+                best_fallback_rsi_group = rsi_groups[0]
+
+                for group in rsi_groups:
+                    min_dist_for_this_group = 1e9
+                    conflict = False
+                    for rsi_val in group:
+                        matched_rsis = assigned_rsi_list[assigned_rsi_list[:, 3] == rsi_val]
+                        if len(matched_rsis) > 0:
+                            dists = haversine_np(
+                                site_lon, site_lat, 
+                                np.degrees(np.arctan2(matched_rsis[:,1], matched_rsis[:,0])), 
+                                np.degrees(np.arcsin(matched_rsis[:,2]/6371000.0))
+                            )
+                            current_min_d = np.min(dists)
+                            if current_min_d < min_dist_for_this_group:
+                                min_dist_for_this_group = current_min_d
+                            if current_min_d < rsi_min_dist:
+                                conflict = True
+                        else:
+                            min_dist_for_this_group = 1e9
+
+                    if min_dist_for_this_group > max_min_rsi_dist:
+                        max_min_rsi_dist = min_dist_for_this_group
+                        best_fallback_rsi_group = group
+
+                    if not conflict:
+                        selected_rsi_group = group
+                        break
+
+                if selected_rsi_group is None:
+                    selected_rsi_group = best_fallback_rsi_group
+                    add_log(f"[WARNING] Site {site_name}: Hết RSI đạt chuẩn {rsi_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_rsi_dist)}m")
+
+                # Process Cells
+                site_assigned_azs = []
+                for cell_idx in range(min(3, len(site_cells))):
+                    cell_row = site_cells.iloc[cell_idx].to_dict()
+
+                    opt_azimuth = calculate_optimum_azimuth(
+                        site_lat, site_lon, n_lats, n_lons, n_azs, 
+                        sector_idx=cell_idx,
+                        assigned_site_azimuths=site_assigned_azs
+                    )
+                    site_assigned_azs.append(opt_azimuth)
+
+                    m_tilt = 2.0
+                    ant_height = float(cell_row.get('Height', 30.0))
+
+                    cell_directional_dist = get_directional_nearest_distance(
+                        site_lat, site_lon, opt_azimuth, n_lats, n_lons, default_dist=nearest_site_dist
+                    )
+                    
+                    d_coverage = (2.0 / 3.0) * cell_directional_dist
+                    total_tilt = math.degrees(math.atan(ant_height / d_coverage))
+                    e_tilt = max(0, int(round(total_tilt - m_tilt)))
+
+                    cell_row['TAC'] = int(assigned_tac)
+                    cell_row['PCI'] = int(selected_pci_group[cell_idx])
+                    cell_row['RSI'] = int(selected_rsi_group[cell_idx])
+                    cell_row['Azimuth'] = int(opt_azimuth)
+                    cell_row['M-Tilt'] = int(m_tilt)
+                    cell_row['E-Tilt'] = int(e_tilt)
+
+                    output_rows.append(cell_row)
+
+                    assigned_pci_list = np.vstack([assigned_pci_list, [*site_cart, cell_row['PCI']]])
+                    assigned_rsi_list = np.vstack([assigned_rsi_list, [*site_cart, cell_row['RSI']]])
+
+                progress = 20 + int(((idx + 1) / total_sites) * 70)
+                progress_bar.progress(progress)
+
+            df_output = pd.DataFrame(output_rows)
+            progress_bar.progress(100)
+            elapsed_time = round(time.time() - start_time, 2)
+            
+            add_log("="*50)
+            add_log(f"THÀNH CÔNG: Đã hoàn tất quy hoạch RF cho {len(output_rows)} cells ({total_sites} sites) trong {elapsed_time}s.")
+
+            status_box.update(label="✅ Hoàn tất quy hoạch RF!", state="complete", expanded=False)
+            st.session_state["output_df"] = df_output
+            st.session_state["logs"] = "\n".join(logs)
+            st.session_state["exec_time"] = elapsed_time
+
+        except Exception as e:
+            status_box.update(label="❌ Lỗi trong quá trình tính toán!", state="error")
+            st.error(f"Lỗi: {str(e)}")
+
+# HIỂN THỊ KẾT QUẢ VÀ LOG VỚI KÍCH THƯỚC VỪA VẶN
+if "output_df" in st.session_state:
+    df_out = st.session_state["output_df"]
+    exec_t = st.session_state.get("exec_time", 0)
+    
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Tổng Site Mới", f"{df_out['Sitename'].nunique()}")
+    m2.metric("Tổng Số Cell", f"{len(df_out)}")
+    m3.metric("E-Tilt Trung Bình", f"{df_out['E-Tilt'].mean():.1f}°")
+    m4.metric("Thời Gian Xử Lý", f"{exec_t}s")
+
+    tab_data, tab_log = st.tabs(["📋 Kết Quả Quy Hoạch (Output Data)", "📜 Nhật Ký Chi Tiết (Execution Logs)"])
+
+    with tab_data:
+        st.dataframe(df_out, use_container_width=True, height=260)
+        csv_buffer = io.StringIO()
+        df_out.to_csv(csv_buffer, index=False)
+        st.download_button(
+            label="📥 Download Output_RF_Design.csv",
+            data=csv_buffer.getvalue().encode('utf-8-sig'),
+            file_name="Output_RF_Design.csv",
+            mime="text/csv",
+            type="primary"
+        )
+
+    with tab_log:
+        st.code(st.session_state.get("logs", ""), language="text")
+else:
+    st.info("Vui lòng chọn 3 file CSV ở Khối 1, điền tham số ở Khối 2 và bấm Execute RF Design.")
