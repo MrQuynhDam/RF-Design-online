@@ -355,6 +355,7 @@ if "output_df" in st.session_state:
         df_out.to_csv(csv_buffer, index=False)
         st.download_button(
             label="📥 Download Output_RF_Design.csv",
+            type="primary",
             data=csv_buffer.getvalue().encode('utf-8-sig'),
             file_name="Output_RF_Design.csv",
             mime="text/csv"
