@@ -124,6 +124,7 @@ def get_directional_nearest_distance(site_lat, site_lon, cell_azimuth, neighbor_
 # ==========================================
 
 # Chia 4 cột cân bằng hoàn hảo
+# Chia 4 cột cân bằng hoàn hảo
 c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.2, 1])
 
 with c1:
@@ -139,7 +140,7 @@ with c4:
     pci_min_dist = st.number_input("PCI Range (m)", min_value=1000, value=8000, step=500)
     rsi_min_dist = st.number_input("RSI Range (m)", min_value=1000, value=8000, step=500)
 
-execute_btn = st.button("🚀 EXECUTE RF DESIGN", type="primary", use_container_width=False)
+execute_btn = st.button("🚀 EXECUTE RF DESIGN", use_container_width=False)
 
 # ==========================================
 # 4. PROCESSING LOGIC & DASHBOARD
