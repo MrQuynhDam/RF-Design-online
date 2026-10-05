@@ -123,11 +123,7 @@ def get_directional_nearest_distance(site_lat, site_lon, cell_azimuth, neighbor_
 # 3. GIAO DIỆN BỐ TRÍ CÂN BẰNG (BALANCED LAYOUT)
 # ==========================================
 
-# ==========================================
-# GIAO DIỆN BỐ TRÍ MỚI (PCI & RSI NẰM DỌC)
-# ==========================================
-
-# Chia thành 4 cột: 3 cột file CSV + 1 cột chứa thông số nằm dọc
+# Chia 4 cột cân bằng hoàn hảo
 c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.2, 1])
 
 with c1:
@@ -140,11 +136,9 @@ with c3:
     input_file = st.file_uploader("3. Input.csv", type=["csv"], key="input")
 
 with c4:
-    # Xếp 2 thông số PCI Range và RSI Range nằm dọc trong cột c4
     pci_min_dist = st.number_input("PCI Range (m)", min_value=1000, value=8000, step=500)
     rsi_min_dist = st.number_input("RSI Range (m)", min_value=1000, value=8000, step=500)
 
-# Nút Execute nằm riêng một hàng, kích thước tự co dãn vừa văn bản (không bị tràn)
 execute_btn = st.button("🚀 EXECUTE RF DESIGN", type="primary", use_container_width=False)
 
 # ==========================================
