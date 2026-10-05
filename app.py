@@ -7,7 +7,7 @@ import streamlit as st
 from scipy.spatial import KDTree
 
 # ==========================================
-# 1. CẤU HÌNH TRANG (ULTRA-COMPACT)
+# 1. CẤU HÌNH TRANG (COMPACT & BALANCED)
 # ==========================================
 st.set_page_config(
     page_title="LTE RF Design Tool",
@@ -16,13 +16,13 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS ép toàn bộ giao diện siêu nhỏ gọn
+# Custom CSS siêu nhỏ gọn và ẩn hoàn toàn phần text rác của Uploader
 st.markdown(
     "",
     unsafe_allow_html=True
 )
 
-# Header siêu nhỏ
+# Header
 st.markdown("#### 📡 LTE RF NETWORK DESIGN AUTOMATION TOOL")
 st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI, RSI, Azimuth, M-Tilt & Directional E-Tilt")
 
@@ -118,11 +118,11 @@ def get_directional_nearest_distance(site_lat, site_lon, cell_azimuth, neighbor_
     return max(np.min(dists), 100.0)
 
 # ==========================================
-# 3. GIAO DIỆN HÀNG NGANG TỐI ƯU (1 SINGLE ROW)
+# 3. GIAO DIỆN BỐ TRÍ CÂN BẰNG (BALANCED LAYOUT)
 # ==========================================
 
-# Gộp toàn bộ File Uploaders + Parameters + Execute Button vào chung 1 hàng (6 Cột)
-c1, c2, c3, c4, c5, c6 = st.columns([1.2, 1.2, 1.2, 1, 1, 1.2])
+# HÀNG 1: 5 Ô NHẬP NẰM NGANG
+c1, c2, c3, c4, c5 = st.columns([1.2, 1.2, 1.2, 1, 1])
 
 with c1:
     rim_file = st.file_uploader("1. RIM.csv", type=["csv"], key="rim")
@@ -134,8 +134,9 @@ with c4:
     pci_min_dist = st.number_input("PCI Range (m)", min_value=1000, value=8000, step=500)
 with c5:
     rsi_min_dist = st.number_input("RSI Range (m)", min_value=1000, value=8000, step=500)
-with c6:
-    execute_btn = st.button("🚀 Run Design", type="primary", use_container_width=True)
+
+# HÀNG 2: NÚT RUN CÂN ĐỐI NẰM RIÊNG
+execute_btn = st.button("🚀 EXECUTE RF DESIGN", type="primary", use_container_width=True)
 
 # ==========================================
 # 4. PROCESSING LOGIC & DASHBOARD
@@ -143,7 +144,7 @@ with c6:
 
 if execute_btn:
     if not rim_file or not config_file or not input_file:
-        st.error("⚠️ Vui lòng nạp đủ 3 file CSV đầu vào!")
+        st.error("⚠️️ Vui lòng nạp đủ 3 file CSV đầu vào!")
     else:
         start_time = time.time()
         logs = []
@@ -339,7 +340,6 @@ if "output_df" in st.session_state:
     df_out = st.session_state["output_df"]
     exec_t = st.session_state.get("exec_time", 0)
     
-    # 4 thẻ chỉ số nhanh gọn
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Site Mới", f"{df_out['Sitename'].nunique()}")
     m2.metric("Tổng Cell", f"{len(df_out)}")
