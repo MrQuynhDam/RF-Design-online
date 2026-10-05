@@ -7,7 +7,7 @@ import streamlit as st
 from scipy.spatial import KDTree
 
 # ==========================================
-# 1. CẤU HÌNH TRANG (THU GỌN CHUẨN DESKTOP)
+# 1. CẤU HÌNH TRANG (ULTRA-COMPACT)
 # ==========================================
 st.set_page_config(
     page_title="LTE RF Design Tool",
@@ -16,10 +16,15 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Header
-st.title("📡 LTE RF DESIGN AUTOMATION TOOL")
-st.caption("Ericsson RAN Systems - Automatic Allocation for TAC, PCI, RSI, Azimuth, M-Tilt & Directional E-Tilt")
-st.divider()
+# Custom CSS ép toàn bộ giao diện siêu nhỏ gọn
+st.markdown(
+    "",
+    unsafe_allow_html=True
+)
+
+# Header siêu nhỏ
+st.markdown("#### 📡 LTE RF NETWORK DESIGN AUTOMATION TOOL")
+st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI, RSI, Azimuth, M-Tilt & Directional E-Tilt")
 
 # ==========================================
 # 2. RF CORE CALCULATIONS & UTILS
@@ -113,42 +118,32 @@ def get_directional_nearest_distance(site_lat, site_lon, cell_azimuth, neighbor_
     return max(np.min(dists), 100.0)
 
 # ==========================================
-# 3. GIAO DIỆN CHÍNH (3 KHỐI DỌC)
+# 3. GIAO DIỆN HÀNG NGANG TỐI ƯU (1 SINGLE ROW)
 # ==========================================
 
-# KHỐI 1: FILE INPUTS
-st.subheader("📁 1. File Inputs")
-col_f1, col_f2, col_f3 = st.columns(3)
+# Gộp toàn bộ File Uploaders + Parameters + Execute Button vào chung 1 hàng (6 Cột)
+c1, c2, c3, c4, c5, c6 = st.columns([1.2, 1.2, 1.2, 1, 1, 1.2])
 
-with col_f1:
-    rim_file = st.file_uploader("RIM.csv (Physical)", type=["csv"], key="rim")
-with col_f2:
-    config_file = st.file_uploader("Config.csv (Logic)", type=["csv"], key="config")
-with col_f3:
-    input_file = st.file_uploader("Input.csv (New Sites)", type=["csv"], key="input")
+with c1:
+    rim_file = st.file_uploader("1. RIM.csv", type=["csv"], key="rim")
+with c2:
+    config_file = st.file_uploader("2. Config.csv", type=["csv"], key="config")
+with c3:
+    input_file = st.file_uploader("3. Input.csv", type=["csv"], key="input")
+with c4:
+    pci_min_dist = st.number_input("PCI Range (m)", min_value=1000, value=8000, step=500)
+with c5:
+    rsi_min_dist = st.number_input("RSI Range (m)", min_value=1000, value=8000, step=500)
+with c6:
+    execute_btn = st.button("🚀 Run Design", type="primary", use_container_width=True)
 
-st.divider()
-
-# KHỐI 2: DESIGN PARAMETERS & CONTROL
-st.subheader("⚙️ 2. Design Parameters & Control")
-col_p1, col_p2, col_p3 = st.columns([2, 2, 2])
-
-with col_p1:
-    pci_min_dist = st.number_input("PCI Reuse Distance Range (m)", min_value=1000, max_value=50000, value=8000, step=500)
-with col_p2:
-    rsi_min_dist = st.number_input("RSI Reuse Distance Range (m)", min_value=1000, max_value=50000, value=8000, step=500)
-with col_p3:
-    st.write("")
-    execute_btn = st.button("🚀 Execute RF Design", type="primary", use_container_width=True)
-
-st.divider()
-
-# KHỐI 3: PROCESS EXECUTION LOGS & RESULTS
-st.subheader("📜 3. Execution Logs & Results")
+# ==========================================
+# 4. PROCESSING LOGIC & DASHBOARD
+# ==========================================
 
 if execute_btn:
     if not rim_file or not config_file or not input_file:
-        st.error("⚠️ Vui lòng chọn đầy đủ và chính xác cả 3 file CSV đầu vào!")
+        st.error("⚠️ Vui lòng nạp đủ 3 file CSV đầu vào!")
     else:
         start_time = time.time()
         logs = []
@@ -157,11 +152,11 @@ if execute_btn:
             timestamp = time.strftime("[%H:%M:%S] ")
             logs.append(timestamp + msg)
 
-        status_box = st.status("⚙️ Bắt đầu tiến trình thiết kế RF...", expanded=True)
+        status_box = st.status("⚙️ Đang thực thi quy hoạch...", expanded=True)
         progress_bar = st.progress(0)
 
         try:
-            status_box.write("Đang đọc các dữ liệu đầu vào...")
+            status_box.write("Đang đọc file dữ liệu...")
             df_rim = pd.read_csv(rim_file)
             df_config = pd.read_csv(config_file)
             df_input = pd.read_csv(input_file)
@@ -170,7 +165,7 @@ if execute_btn:
             df_config.columns = df_config.columns.str.strip()
             df_input.columns = df_input.columns.str.strip()
 
-            add_log(f"Đọc dữ liệu: RIM ({len(df_rim)} rows), Config ({len(df_config)} rows), Input ({len(df_input)} rows).")
+            add_log(f"Đọc dữ liệu thành công: RIM ({len(df_rim)} dòng), Config ({len(df_config)} dòng), Input ({len(df_input)} dòng).")
             progress_bar.progress(10)
 
             df_existing = pd.merge(df_rim, df_config[['Cellname', 'TAC', 'PCI', 'RSI']], on='Cellname', how='inner')
@@ -216,7 +211,6 @@ if execute_btn:
                 else:
                     n_lats, n_lons, n_azs = np.array([]), np.array([]), np.array([])
 
-                # PCI Allocation
                 selected_pci_group = None
                 max_min_pci_dist = -1
                 best_fallback_pci_group = pci_groups[0]
@@ -252,7 +246,6 @@ if execute_btn:
                     selected_pci_group = best_fallback_pci_group
                     add_log(f"[WARNING] Site {site_name}: Hết PCI đạt chuẩn {pci_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_pci_dist)}m")
 
-                # RSI Allocation
                 selected_rsi_group = None
                 max_min_rsi_dist = -1
                 best_fallback_rsi_group = rsi_groups[0]
@@ -288,7 +281,6 @@ if execute_btn:
                     selected_rsi_group = best_fallback_rsi_group
                     add_log(f"[WARNING] Site {site_name}: Hết RSI đạt chuẩn {rsi_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_rsi_dist)}m")
 
-                # Process Cells
                 site_assigned_azs = []
                 for cell_idx in range(min(3, len(site_cells))):
                     cell_row = site_cells.iloc[cell_idx].to_dict()
@@ -331,32 +323,33 @@ if execute_btn:
             elapsed_time = round(time.time() - start_time, 2)
             
             add_log("="*50)
-            add_log(f"THÀNH CÔNG: Đã hoàn tất quy hoạch RF cho {len(output_rows)} cells ({total_sites} sites) trong {elapsed_time}s.")
+            add_log(f"THÀNH CÔNG: Hoàn thành quy hoạch cho {len(output_rows)} cells ({total_sites} sites) trong {elapsed_time}s.")
 
-            status_box.update(label="✅ Hoàn tất quy hoạch RF!", state="complete", expanded=False)
+            status_box.update(label="✅ Hoàn tất quy hoạch!", state="complete", expanded=False)
             st.session_state["output_df"] = df_output
             st.session_state["logs"] = "\n".join(logs)
             st.session_state["exec_time"] = elapsed_time
 
         except Exception as e:
-            status_box.update(label="❌ Lỗi trong quá trình tính toán!", state="error")
+            status_box.update(label="❌ Lỗi tính toán!", state="error")
             st.error(f"Lỗi: {str(e)}")
 
-# HIỂN THỊ KẾT QUẢ VÀ LOG VỚI KÍCH THƯỚC VỪA VẶN
+# HIỂN THỊ KẾT QUẢ VỚI CHIỀU CAO THU NHỎ
 if "output_df" in st.session_state:
     df_out = st.session_state["output_df"]
     exec_t = st.session_state.get("exec_time", 0)
     
+    # 4 thẻ chỉ số nhanh gọn
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Tổng Site Mới", f"{df_out['Sitename'].nunique()}")
-    m2.metric("Tổng Số Cell", f"{len(df_out)}")
-    m3.metric("E-Tilt Trung Bình", f"{df_out['E-Tilt'].mean():.1f}°")
-    m4.metric("Thời Gian Xử Lý", f"{exec_t}s")
+    m1.metric("Site Mới", f"{df_out['Sitename'].nunique()}")
+    m2.metric("Tổng Cell", f"{len(df_out)}")
+    m3.metric("E-Tilt TB", f"{df_out['E-Tilt'].mean():.1f}°")
+    m4.metric("Thời Gian", f"{exec_t}s")
 
-    tab_data, tab_log = st.tabs(["📋 Kết Quả Quy Hoạch (Output Data)", "📜 Nhật Ký Chi Tiết (Execution Logs)"])
+    tab_data, tab_log = st.tabs(["📋 Kết Quả (Output Data)", "📜 Nhật Ký (Logs)"])
 
     with tab_data:
-        st.dataframe(df_out, use_container_width=True, height=260)
+        st.dataframe(df_out, use_container_width=True, height=180)
         csv_buffer = io.StringIO()
         df_out.to_csv(csv_buffer, index=False)
         st.download_button(
@@ -369,5 +362,3 @@ if "output_df" in st.session_state:
 
     with tab_log:
         st.code(st.session_state.get("logs", ""), language="text")
-else:
-    st.info("Vui lòng chọn 3 file CSV ở Khối 1, điền tham số ở Khối 2 và bấm Execute RF Design.")
