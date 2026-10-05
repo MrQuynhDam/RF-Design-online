@@ -349,7 +349,7 @@ if "output_df" in st.session_state:
     tab_data, tab_log = st.tabs(["📋 Kết Quả (Output Data)", "📜 Nhật Ký (Logs)"])
 
     with tab_data:
-        st.dataframe(df_out, use_container_width=True, height=540)
+        st.dataframe(df_out, use_container_width=True, height=360)
         csv_buffer = io.StringIO()
         df_out.to_csv(csv_buffer, index=False)
         st.download_button(
