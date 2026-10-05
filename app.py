@@ -7,7 +7,7 @@ import streamlit as st
 from scipy.spatial import KDTree
 
 # ==========================================
-# 1. CẤU HÌNH TRANG
+# 1. CẤU HÌNH TRANG & TỐI ƯU VIEWPORT SINGLE-PAGE
 # ==========================================
 st.set_page_config(
     page_title="LTE RF Design Tool",
@@ -16,8 +16,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Header
-st.title("📡 LTE RF NETWORK DESIGN AUTOMATION")
+# Custom CSS ép toàn bộ trang vừa khít 1 màn hình (No Page Scroll)
+st.markdown(
+    "",
+    unsafe_allow_html=True
+)
+
+# Header thu nhỏ gọn gàng
+st.markdown("### 📡 LTE RF NETWORK DESIGN AUTOMATION")
 st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI, RSI, Azimuth, M-Tilt & Directional E-Tilt")
 st.divider()
 
@@ -26,16 +32,14 @@ st.divider()
 # ==========================================
 
 def haversine_np(lon1, lat1, lon2, lat2):
-    """Tính khoảng cách theo mét giữa các tọa độ GPS (Vectorized)."""
     lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
     dlon = lon2 - lon1
     dlat = lat2 - lat1
     a = np.sin(dlat/2.0)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2.0)**2
     c = 2 * np.arcsin(np.sqrt(a))
-    return c * 6367000.0  # mét
+    return c * 6367000.0
 
 def latlon_to_cartesian(lat, lon):
-    """Chuyển đổi Lat/Lon sang tọa độ x,y,z xấp xỉ trên mặt cầu (mét) dùng cho KDTree."""
     R = 6371000.0
     lat_rad = np.radians(lat)
     lon_rad = np.radians(lon)
@@ -45,12 +49,6 @@ def latlon_to_cartesian(lat, lon):
     return np.column_stack((x, y, z))
 
 def calculate_optimum_azimuth(site_lat, site_lon, neighbor_lats, neighbor_lons, neighbor_azimuths, sector_idx, assigned_site_azimuths=[]):
-    """
-    Tìm Azimuth tối ưu cho Cell:
-    - Nằm trong dải quy định của Sector.
-    - Tránh hướng ngắm đối diện (face-to-face) với các cell lân cận.
-    - Đảm bảo độ lệch góc với các cell đã gán trong cùng site >= 90 độ.
-    """
     default_azimuths = [0, 120, 240]
     best_azimuth = default_azimuths[sector_idx]
     max_score = -1e9
@@ -101,7 +99,6 @@ def calculate_optimum_azimuth(site_lat, site_lon, neighbor_lats, neighbor_lons, 
     return best_azimuth
 
 def get_directional_nearest_distance(site_lat, site_lon, cell_azimuth, neighbor_lats, neighbor_lons, default_dist=1500.0):
-    """Tính khoảng cách tới trạm lân cận gần nhất NẰM TRONG HƯỚNG BẮN của Cell (+- 45 độ)."""
     if len(neighbor_lats) == 0:
         return default_dist
 
@@ -122,25 +119,25 @@ def get_directional_nearest_distance(site_lat, site_lon, cell_azimuth, neighbor_
     return max(np.min(dists), 100.0)
 
 # ==========================================
-# 3. SIDEBAR & INPUT CONTROLS
+# 3. SIDEBAR & COMPACT INPUT CONTROLS
 # ==========================================
 
 with st.sidebar:
-    st.subheader("📂 1. File Inputs (CSV)")
+    st.markdown("#### 📂 1. Input CSV Files")
     rim_file = st.file_uploader("RIM.csv (Physical)", type=["csv"])
     config_file = st.file_uploader("Config.csv (Logic)", type=["csv"])
     input_file = st.file_uploader("Input.csv (New Sites)", type=["csv"])
     
     st.divider()
-    st.subheader("⚙️ 2. Design Parameters")
-    pci_min_dist = st.number_input("PCI Reuse Distance Range (m)", min_value=1000, max_value=50000, value=8000, step=500)
-    rsi_min_dist = st.number_input("RSI Reuse Distance Range (m)", min_value=1000, max_value=50000, value=8000, step=500)
+    st.markdown("#### ⚙️ 2. Design Parameters")
+    pci_min_dist = st.number_input("PCI Range (m)", min_value=1000, max_value=50000, value=8000, step=500)
+    rsi_min_dist = st.number_input("RSI Range (m)", min_value=1000, max_value=50000, value=8000, step=500)
     
     st.divider()
     execute_btn = st.button("🚀 Run RF Design", type="primary", use_container_width=True)
 
 # ==========================================
-# 4. MAIN PROCESSING ENGINE
+# 4. MAIN COMPACT PROCESSING ENGINE
 # ==========================================
 
 main_container = st.container()
@@ -157,7 +154,7 @@ with main_container:
                 timestamp = time.strftime("[%H:%M:%S] ")
                 logs.append(timestamp + msg)
 
-            status_box = st.status("⚙️ Đang thực thi thuật toán quy hoạch...", expanded=True)
+            status_box = st.status("⚙️ Đang thực thi quy hoạch...", expanded=True)
             progress_bar = st.progress(0)
 
             try:
@@ -216,7 +213,6 @@ with main_container:
                     else:
                         n_lats, n_lons, n_azs = np.array([]), np.array([]), np.array([])
 
-                    # PCI Allocation (Max-Min Strategy)
                     selected_pci_group = None
                     max_min_pci_dist = -1
                     best_fallback_pci_group = pci_groups[0]
@@ -252,7 +248,6 @@ with main_container:
                         selected_pci_group = best_fallback_pci_group
                         add_log(f"[WARNING] Site {site_name}: Hết PCI đạt chuẩn {pci_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_pci_dist)}m")
 
-                    # RSI Allocation (Max-Min Strategy)
                     selected_rsi_group = None
                     max_min_rsi_dist = -1
                     best_fallback_rsi_group = rsi_groups[0]
@@ -288,7 +283,6 @@ with main_container:
                         selected_rsi_group = best_fallback_rsi_group
                         add_log(f"[WARNING] Site {site_name}: Hết RSI đạt chuẩn {rsi_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_rsi_dist)}m")
 
-                    # Process Cells
                     site_assigned_azs = []
                     for cell_idx in range(min(3, len(site_cells))):
                         cell_row = site_cells.iloc[cell_idx].to_dict()
@@ -333,23 +327,23 @@ with main_container:
                 add_log("="*50)
                 add_log(f"THÀNH CÔNG: Hoàn thành quy hoạch cho {len(output_rows)} cells ({total_sites} sites) trong {elapsed_time}s.")
 
-                status_box.update(label="✅ Hoàn tất quy hoạch RF!", state="complete", expanded=False)
+                status_box.update(label="✅ Hoàn tất quy hoạch!", state="complete", expanded=False)
                 st.session_state["output_df"] = df_output
                 st.session_state["logs"] = "\n".join(logs)
                 st.session_state["exec_time"] = elapsed_time
 
             except Exception as e:
-                status_box.update(label="❌ Lỗi trong quá trình tính toán!", state="error")
+                status_box.update(label="❌ Lỗi tính toán!", state="error")
                 st.error(f"Lỗi: {str(e)}")
 
     # ==========================================
-    # 5. RESULT DASHBOARD DISPLAY
+    # 5. FIXED-HEIGHT COMPACT DASHBOARD
     # ==========================================
     if "output_df" in st.session_state:
         df_out = st.session_state["output_df"]
         exec_t = st.session_state.get("exec_time", 0)
         
-        # KPI Dashboard Cards
+        # KPI Metric Cards
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Tổng Trạm Mới", f"{df_out['Sitename'].nunique()} Sites")
         m2.metric("Tổng Số Cell", f"{len(df_out)} Cells")
@@ -358,12 +352,12 @@ with main_container:
 
         st.divider()
 
-        # Two-Column Layout
         col_left, col_right = st.columns([2, 1])
 
         with col_left:
-            st.subheader("📋 Output Data Preview (Output_RF_Design.csv)")
-            st.dataframe(df_out, use_container_width=True, height=380)
+            st.markdown("##### 📋 Output Data Preview")
+            # Cố định chiều cao 220px vừa khít khung nhìn
+            st.dataframe(df_out, use_container_width=True, height=220)
 
             csv_buffer = io.StringIO()
             df_out.to_csv(csv_buffer, index=False)
@@ -377,7 +371,8 @@ with main_container:
             )
 
         with col_right:
-            st.subheader("📜 Process Execution Logs")
+            st.markdown("##### 📜 Execution Logs")
+            # Cố định chiều cao khung Log vừa vặn
             st.code(st.session_state.get("logs", ""), language="text")
     else:
-        st.info("👈 Vui lòng tải lên 3 file CSV ở thanh bên trái và bấm Run RF Design để bắt đầu.")
+        st.info("👈 Vui lòng tải lên 3 file CSV ở thanh bên trái và bấm **Run RF Design** để bắt đầu.")
