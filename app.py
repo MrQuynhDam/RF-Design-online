@@ -138,7 +138,7 @@ with c4:
     pci_min_dist = st.number_input("PCI Range (m)", min_value=1000, value=8000, step=500)
     rsi_min_dist = st.number_input("RSI Range (m)", min_value=1000, value=8000, step=500)
 
-execute_btn = st.button("🚀 EXECUTE RF DESIGN", use_container_width=False)
+execute_btn = st.button("🚀 EXECUTE RF DESIGN", type="primary", use_container_width=False)
 
 # ==========================================
 # 4. PROCESSING LOGIC & DASHBOARD
