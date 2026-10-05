@@ -18,7 +18,9 @@ st.set_page_config(
 
 # Custom CSS siêu nhỏ gọn và ẩn hoàn toàn phần text rác của Uploader
 st.markdown(
-    "",
+    """
+    
+    """,
     unsafe_allow_html=True
 )
 
@@ -136,7 +138,7 @@ with c5:
     rsi_min_dist = st.number_input("RSI Range (m)", min_value=1000, value=8000, step=500)
 
 # HÀNG 2: NÚT RUN CÂN ĐỐI NẰM RIÊNG
-execute_btn = st.button("🚀 EXECUTE RF DESIGN", type="primary", use_container_width=True)
+execute_btn = st.button("🚀 EXECUTE RF DESIGN", type="primary", use_container_width=False)
 
 # ==========================================
 # 4. PROCESSING LOGIC & DASHBOARD
