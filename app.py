@@ -7,7 +7,7 @@ import streamlit as st
 from scipy.spatial import KDTree
 
 # ==========================================
-# 1. CẤU HÌNH TRANG (COMPACT & BALANCED)
+# 1. CẤU HÌNH TRANG
 # ==========================================
 st.set_page_config(
     page_title="LTE RF Design Tool",
@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS siêu nhỏ gọn và ẩn hoàn toàn phần text rác của Uploader
+# Custom CSS ép giao diện gọn gàng + Đổi màu nút Navy Blue
 st.markdown(
     """
     
@@ -25,7 +25,7 @@ st.markdown(
 )
 
 # Header
-st.markdown("#### 📡 LTE RF NETWORK DESIGN AUTOMATION TOOL")
+st.title("📡 LTE RF DESIGN AUTOMATION TOOL")
 st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI, RSI, Azimuth, M-Tilt & Directional E-Tilt")
 
 # ==========================================
@@ -120,11 +120,9 @@ def get_directional_nearest_distance(site_lat, site_lon, cell_azimuth, neighbor_
     return max(np.min(dists), 100.0)
 
 # ==========================================
-# 3. GIAO DIỆN BỐ TRÍ CÂN BẰNG (BALANCED LAYOUT)
+# 3. GIAO DIỆN BỐ TRÍ PHẲNG ĐỆT
 # ==========================================
 
-# Chia 4 cột cân bằng hoàn hảo
-# Chia 4 cột cân bằng hoàn hảo
 c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.2, 1])
 
 with c1:
@@ -148,7 +146,7 @@ execute_btn = st.button("🚀 EXECUTE RF DESIGN", use_container_width=False)
 
 if execute_btn:
     if not rim_file or not config_file or not input_file:
-        st.error("⚠️️ Vui lòng nạp đủ 3 file CSV đầu vào!")
+        st.error("⚠️ Vui lòng nạp đủ 3 file CSV đầu vào!")
     else:
         start_time = time.time()
         logs = []
@@ -353,15 +351,14 @@ if "output_df" in st.session_state:
     tab_data, tab_log = st.tabs(["📋 Kết Quả (Output Data)", "📜 Nhật Ký (Logs)"])
 
     with tab_data:
-        st.dataframe(df_out, use_container_width=True, height=360)
+        st.dataframe(df_out, use_container_width=True, height=180)
         csv_buffer = io.StringIO()
         df_out.to_csv(csv_buffer, index=False)
         st.download_button(
             label="📥 Download Output_RF_Design.csv",
             data=csv_buffer.getvalue().encode('utf-8-sig'),
             file_name="Output_RF_Design.csv",
-            mime="text/csv",
-            type="primary"
+            mime="text/csv"
         )
 
     with tab_log:
