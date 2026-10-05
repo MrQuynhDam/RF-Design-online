@@ -18,8 +18,7 @@ st.set_page_config(
 
 # Custom CSS ép giao diện gọn gàng + Đổi màu nút Navy Blue
 st.markdown(
-    """
-    
+    """    
     """,
     unsafe_allow_html=True
 )
