@@ -16,15 +16,11 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS ép giao diện gọn gàng + Đổi màu nút Navy Blue
 st.markdown("""
     <style>
-    /* 1. Ẩn chữ gốc bên trong khối hướng dẫn uploader */
     div[data-testid="stFileUploaderDropzoneInstructions"] > * {
         display: none !important;
     }
-    
-    /* 2. Tạo nội dung chữ mới hiển thị thay thế */
     div[data-testid="stFileUploaderDropzoneInstructions"]::after {
         content: "10MB per file • CSV";
         font-size: 14px;
@@ -33,9 +29,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Header
 st.title("📡 LTE RF DESIGN AUTOMATION TOOL")
-st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI, RSI, Azimuth, M-Tilt & Directional E-Tilt")
+st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI (Mod3/6/30 Safe), RSI, Azimuth, M-Tilt & Directional E-Tilt")
 
 # ==========================================
 # 2. RF CORE CALCULATIONS & UTILS
@@ -129,6 +124,57 @@ def get_directional_nearest_distance(site_lat, site_lon, cell_azimuth, neighbor_
     return max(np.min(dists), 100.0)
 
 # ==========================================
+# MODULO & DISTANCE CHECKERS (NEW CORE)
+# ==========================================
+
+def check_pci_group_validity(candidate_group, site_lon, site_lat, assigned_pci_list, pci_min_dist, mod3_min_dist=3000.0, mod6_min_dist=2000.0):
+    """
+    Kiểm tra một nhóm PCI candidate (3 PCI) đối với các PCI đã được gán.
+    Trả về: (is_valid, min_pci_dist_found)
+    """
+    if len(assigned_pci_list) == 0:
+        return True, 1e9
+
+    min_pci_dist = 1e9
+    
+    # Chuyển đổi tọa độ cartesian sang lat/lon cho các PCI đã gán
+    assigned_lons = np.degrees(np.arctan2(assigned_pci_list[:, 1], assigned_pci_list[:, 0]))
+    assigned_lats = np.degrees(np.arcsin(assigned_pci_list[:, 2] / 6371000.0))
+    assigned_pcis = assigned_pci_list[:, 3].astype(int)
+
+    # Tính khoảng cách từ site hiện tại đến TẤT CẢ các cell đã gán PCI
+    dists = haversine_np(site_lon, site_lat, assigned_lons, assigned_lats)
+
+    for pci_candidate in candidate_group:
+        cand_mod3 = pci_candidate % 3
+        cand_mod6 = pci_candidate % 6
+
+        # 1. Kiểm tra Trùng PCI (PCI Collision)
+        same_pci_mask = (assigned_pcis == pci_candidate)
+        if np.any(same_pci_mask):
+            d = np.min(dists[same_pci_mask])
+            if d < min_pci_dist:
+                min_pci_dist = d
+            if d < pci_min_dist:
+                return False, min_pci_dist
+
+        # 2. Kiểm tra Xung đột Mod3 (PSS Collision) trong bán kính mod3_min_dist
+        same_mod3_mask = ((assigned_pcis % 3) == cand_mod3)
+        if np.any(same_mod3_mask):
+            d_mod3 = np.min(dists[same_mod3_mask])
+            if d_mod3 < mod3_min_dist:
+                return False, min_pci_dist
+
+        # 3. Kiểm tra Xung đột Mod6 (CRS Interference) trong bán kính mod6_min_dist
+        same_mod6_mask = ((assigned_pcis % 6) == cand_mod6)
+        if np.any(same_mod6_mask):
+            d_mod6 = np.min(dists[same_mod6_mask])
+            if d_mod6 < mod6_min_dist:
+                return False, min_pci_dist
+
+    return True, min_pci_dist
+
+# ==========================================
 # 3. GIAO DIỆN BỐ TRÍ PHẲNG ĐỆT
 # ==========================================
 
@@ -195,7 +241,7 @@ if execute_btn:
 
             unique_sites = df_input['Sitename'].unique()
             total_sites = len(unique_sites)
-            add_log(f"Bắt đầu quy hoạch cho {total_sites} site mới...")
+            add_log(f"Bắt đầu quy hoạch cho {total_sites} site mới với ràng buộc Mod3/Mod6...")
 
             output_rows = []
 
@@ -223,41 +269,36 @@ if execute_btn:
                 else:
                     n_lats, n_lons, n_azs = np.array([]), np.array([]), np.array([])
 
+                # ==========================================
+                # LỰA CHỌN PCI AN TOÀN MOD3/MOD6
+                # ==========================================
                 selected_pci_group = None
                 max_min_pci_dist = -1
                 best_fallback_pci_group = pci_groups[0]
 
                 for group in pci_groups:
-                    min_dist_for_this_group = 1e9
-                    conflict = False
-                    for pci_val in group:
-                        matched_pcis = assigned_pci_list[assigned_pci_list[:, 3] == pci_val]
-                        if len(matched_pcis) > 0:
-                            dists = haversine_np(
-                                site_lon, site_lat, 
-                                np.degrees(np.arctan2(matched_pcis[:,1], matched_pcis[:,0])), 
-                                np.degrees(np.arcsin(matched_pcis[:,2]/6371000.0))
-                            )
-                            current_min_d = np.min(dists)
-                            if current_min_d < min_dist_for_this_group:
-                                min_dist_for_this_group = current_min_d
-                            if current_min_d < pci_min_dist:
-                                conflict = True
-                        else:
-                            min_dist_for_this_group = 1e9
+                    is_valid, min_d = check_pci_group_validity(
+                        group, site_lon, site_lat, assigned_pci_list, 
+                        pci_min_dist=pci_min_dist, 
+                        mod3_min_dist=min(3000.0, pci_min_dist * 0.4), # Mod3 bảo vệ tối thiểu 40% bán kính tái sử dụng PCI
+                        mod6_min_dist=min(2000.0, pci_min_dist * 0.25) # Mod6 bảo vệ tối thiểu 25%
+                    )
 
-                    if min_dist_for_this_group > max_min_pci_dist:
-                        max_min_pci_dist = min_dist_for_this_group
+                    if min_d > max_min_pci_dist:
+                        max_min_pci_dist = min_d
                         best_fallback_pci_group = group
 
-                    if not conflict:
+                    if is_valid:
                         selected_pci_group = group
                         break
 
                 if selected_pci_group is None:
                     selected_pci_group = best_fallback_pci_group
-                    add_log(f"[WARNING] Site {site_name}: Hết PCI đạt chuẩn {pci_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_pci_dist)}m")
+                    add_log(f"[WARNING] Site {site_name}: Hết PCI thỏa mãn tuyệt đối Mod3/Mod6 & Range {pci_min_dist}m! Chọn nhóm tốt nhất d_min = {int(max_min_pci_dist)}m")
 
+                # ==========================================
+                # LỰA CHỌN RSI
+                # ==========================================
                 selected_rsi_group = None
                 max_min_rsi_dist = -1
                 best_fallback_rsi_group = rsi_groups[0]
@@ -293,6 +334,9 @@ if execute_btn:
                     selected_rsi_group = best_fallback_rsi_group
                     add_log(f"[WARNING] Site {site_name}: Hết RSI đạt chuẩn {rsi_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_rsi_dist)}m")
 
+                # ==========================================
+                # TÍNH TOÁN SECTOR & TILT
+                # ==========================================
                 site_assigned_azs = []
                 for cell_idx in range(min(3, len(site_cells))):
                     cell_row = site_cells.iloc[cell_idx].to_dict()
