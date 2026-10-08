@@ -17,11 +17,21 @@ st.set_page_config(
 )
 
 # Custom CSS ép giao diện gọn gàng + Đổi màu nút Navy Blue
-st.markdown(
-    """    
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("""
+    <style>
+    /* 1. Ẩn chữ gốc bên trong khối hướng dẫn uploader */
+    div[data-testid="stFileUploaderDropzoneInstructions"] > * {
+        display: none !important;
+    }
+    
+    /* 2. Tạo nội dung chữ mới hiển thị thay thế */
+    div[data-testid="stFileUploaderDropzoneInstructions"]::after {
+        content: "10MB per file • CSV";
+        font-size: 14px;
+        color: #808495;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # Header
 st.title("📡 LTE RF DESIGN AUTOMATION TOOL")
