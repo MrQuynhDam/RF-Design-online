@@ -1,4 +1,5 @@
 import io
+import os
 import time
 import math
 import requests
@@ -20,12 +21,8 @@ st.set_page_config(
 # Custom CSS cho layout chuyên nghiệp
 st.markdown("""
     <style>
-    /* Styling chính */
     .main {
         background-color: #f8f9fa;
-    }
-    .stAppHeader {
-        background-color: rgba(255, 255, 255, 0.8);
     }
     
     /* Card container */
@@ -59,7 +56,7 @@ st.markdown("""
         gap: 8px;
     }
     
-    /* Highlight button */
+    /* Primary Button Styling */
     div.stButton > button[kind="primary"] {
         background-color: #2563eb;
         border-color: #2563eb;
@@ -94,21 +91,36 @@ with st.sidebar:
     st.caption("Developed for Ericsson RAN RF Planning Automation")
 
 # ==========================================
-# 3. TẢI FILE MẪU (GITHUB RAW) & INPUT DATA
+# 3. TẢI FILE MẪU & INPUT DATA
 # ==========================================
 
-# Base URL GitHub Raw
-GITHUB_RAW_BASE = "https://raw.githubusercontent.com/MrQuynhDam/test/main"
+# Điền tên Repository GitHub chính xác của bạn vào đây nếu chạy xa (Remote Streamlit Cloud)
+GITHUB_USER = "MrQuynhDam"
+GITHUB_REPO = "YOUR_REPO_NAME"  # Thay tên Repo của bạn vào đây nếu dùng online
 
 @st.cache_data
-def load_sample_file(filename):
-    url = f"{GITHUB_RAW_BASE}/{filename}"
+def get_sample_file_bytes(filename):
+    # 1. Ưu tiên kiểm tra file cục bộ trong cùng thư mục
+    if os.path.exists(filename):
+        with open(filename, "rb") as f:
+            return f.read()
+            
+    # 2. Tự động tìm thử các tên biến thể phổ biến nếu có
+    possible_names = [filename, filename.replace("_Sample", "S_Sample")]
+    for p_name in possible_names:
+        if os.path.exists(p_name):
+            with open(p_name, "rb") as f:
+                return f.read()
+
+    # 3. Fallback tải qua GitHub URL
+    url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/{filename}"
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=5)
         if response.status_code == 200:
             return response.content
     except Exception:
         pass
+
     return None
 
 col_left, col_right = st.columns([1, 2], gap="medium")
@@ -116,7 +128,7 @@ col_left, col_right = st.columns([1, 2], gap="medium")
 # --- BÊN TRÁI: DOWLOAD FILE MẪU ---
 with col_left:
     st.markdown('<div class="section-title">📥 1. Tải Tệp Mẫu (Sample Files)</div>', unsafe_allow_html=True)
-    st.info("Tải các file định dạng chuẩn mẫu từ repository GitHub[cite: 2] để kiểm tra hệ thống:")
+    st.info("Tải các file định dạng chuẩn mẫu từ dự án để kiểm tra hệ thống:")
     
     sample_files = {
         "RIMS_Sample.csv": "File thông tin Trạm RIM hiện hữu",
@@ -125,7 +137,7 @@ with col_left:
     }
 
     for fname, fdesc in sample_files.items():
-        file_bytes = load_sample_file(fname)
+        file_bytes = get_sample_file_bytes(fname)
         if file_bytes:
             st.download_button(
                 label="📄 " + fname,
