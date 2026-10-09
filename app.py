@@ -64,7 +64,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📡 LTE RF DESIGN AUTOMATION TOOL")
-st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI (Best-Fit Range 0-449), RSI, Azimuth, M-Tilt & Directional E-Tilt")
+st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI (Best-Fit Range 0-449), RSI, Azimuth, M-Tilt & E-Tilt")
 st.markdown("---")
 
 # ==========================================
@@ -72,7 +72,7 @@ st.markdown("---")
 # ==========================================
 with st.sidebar:
     st.header("⚙️ Cấu Hình Tham Số")
-    st.markdown("Thiết lập khoảng cách an toàn cho thuật toán phân bổ Best-Fit:")
+    # st.markdown("Thiết lập khoảng cách an toàn cho thuật toán phân bổ Best-Fit:")
     
     pci_min_dist = st.number_input("PCI Min Range (m)", min_value=1000, value=8000, step=500, help="Khoảng cách tối thiểu tái sử dụng PCI")
     rsi_min_dist = st.number_input("RSI Min Range (m)", min_value=1000, value=8000, step=500, help="Khoảng cách tối thiểu tái sử dụng RSI")
@@ -83,13 +83,13 @@ with st.sidebar:
     mod6_factor = st.slider("Bảo vệ Mod6 (% PCI Range)", min_value=10, max_value=100, value=25, step=5) / 100.0
     
     st.markdown("---")
-    st.caption("Developed for Ericsson RAN RF Planning Automation")
+    # st.caption("Developed for Ericsson RAN RF Planning Automation")
 
 # ==========================================
 # 3. TẢI FILE MẪU & INPUT DATA
 # ==========================================
-GITHUB_USER = "MrQuynhDam"
-GITHUB_REPO = "YOUR_REPO_NAME"
+# GITHUB_USER = "MrQuynhDam"
+# GITHUB_REPO = "YOUR_REPO_NAME"
 
 @st.cache_data
 def get_sample_file_bytes(filename):
