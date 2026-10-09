@@ -1,39 +1,162 @@
 import io
 import time
 import math
+import requests
 import numpy as np
 import pandas as pd
 import streamlit as st
 from scipy.spatial import KDTree
 
 # ==========================================
-# 1. CẤU HÌNH TRANG
+# 1. CẤU HÌNH TRANG & GIAO DIỆN CHUYÊN NGHIỆP
 # ==========================================
 st.set_page_config(
     page_title="LTE RF Design Tool",
     page_icon="📡",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
+# Custom CSS cho layout chuyên nghiệp
 st.markdown("""
     <style>
+    /* Styling chính */
+    .main {
+        background-color: #f8f9fa;
+    }
+    .stAppHeader {
+        background-color: rgba(255, 255, 255, 0.8);
+    }
+    
+    /* Card container */
+    .custom-card {
+        background-color: #ffffff;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e9ecef;
+        margin-bottom: 20px;
+    }
+    
+    /* Custom Uploader Label */
     div[data-testid="stFileUploaderDropzoneInstructions"] > * {
         display: none !important;
     }
     div[data-testid="stFileUploaderDropzoneInstructions"]::after {
-        content: "10MB per file • CSV";
-        font-size: 14px;
-        color: #808495;
+        content: "Kéo thả hoặc chọn file CSV (Max 10MB)";
+        font-size: 13px;
+        color: #6c757d;
+    }
+    
+    /* Section Title */
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    /* Highlight button */
+    div.stButton > button[kind="primary"] {
+        background-color: #2563eb;
+        border-color: #2563eb;
+        font-weight: 600;
+        border-radius: 6px;
+        height: 46px;
     }
     </style>
 """, unsafe_allow_html=True)
 
+# Header
 st.title("📡 LTE RF DESIGN AUTOMATION TOOL")
-st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI (Mod3/6/30 Safe), RSI, Azimuth, M-Tilt & Directional E-Tilt")
+st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI (Mod3/6 Safe), RSI, Azimuth, M-Tilt & Directional E-Tilt")
+st.markdown("---")
 
 # ==========================================
-# 2. RF CORE CALCULATIONS & UTILS
+# 2. THANH BÊN (SIDEBAR) - CẤU HÌNH THAM SỐ
+# ==========================================
+with st.sidebar:
+    st.header("⚙️ Cấu Hình Tham Số")
+    st.markdown("Thiết lập khoảng cách an toàn cho thuật toán phân bổ:")
+    
+    pci_min_dist = st.number_input("PCI Min Range (m)", min_value=1000, value=8000, step=500, help="Khoảng cách tối thiểu tái sử dụng PCI")
+    rsi_min_dist = st.number_input("RSI Min Range (m)", min_value=1000, value=8000, step=500, help="Khoảng cách tối thiểu tái sử dụng RSI")
+    
+    st.markdown("---")
+    st.markdown("##### 🛡️ Ràng buộc Modulo")
+    mod3_factor = st.slider("Bảo vệ Mod3 (% PCI Range)", min_value=10, max_value=100, value=40, step=5) / 100.0
+    mod6_factor = st.slider("Bảo vệ Mod6 (% PCI Range)", min_value=10, max_value=100, value=25, step=5) / 100.0
+    
+    st.markdown("---")
+    st.caption("Developed for Ericsson RAN RF Planning Automation")
+
+# ==========================================
+# 3. TẢI FILE MẪU (GITHUB RAW) & INPUT DATA
+# ==========================================
+
+# Base URL GitHub Raw
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/MrQuynhDam/test/main"
+
+@st.cache_data
+def load_sample_file(filename):
+    url = f"{GITHUB_RAW_BASE}/{filename}"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.content
+    except Exception:
+        pass
+    return None
+
+col_left, col_right = st.columns([1, 2], gap="medium")
+
+# --- BÊN TRÁI: DOWLOAD FILE MẪU ---
+with col_left:
+    st.markdown('<div class="section-title">📥 1. Tải Tệp Mẫu (Sample Files)</div>', unsafe_allow_html=True)
+    st.info("Tải các file định dạng chuẩn mẫu từ repository GitHub[cite: 2] để kiểm tra hệ thống:")
+    
+    sample_files = {
+        "RIMS_Sample.csv": "File thông tin Trạm RIM hiện hữu",
+        "Config_Sample.csv": "File cấu hình Cell hiện hữu (TAC/PCI/RSI)",
+        "Input_Sample.csv": "File danh sách Site mới cần quy hoạch"
+    }
+
+    for fname, fdesc in sample_files.items():
+        file_bytes = load_sample_file(fname)
+        if file_bytes:
+            st.download_button(
+                label="📄 " + fname,
+                data=file_bytes,
+                file_name=fname,
+                mime="text/csv",
+                use_container_width=True,
+                help=fdesc
+            )
+        else:
+            st.button(f"❌ Không tìm thấy {fname}", disabled=True, use_container_width=True)
+
+# --- BÊN PHẢI: UPLOAD FILE ĐẦU VÀO ---
+with col_right:
+    st.markdown('<div class="section-title">📤 2. Tải Dữ Liệu Đầu Vào (Input Upload)</div>', unsafe_allow_html=True)
+    
+    u1, u2, u3 = st.columns(3)
+    with u1:
+        rim_file = st.file_uploader("1. RIMS.csv", type=["csv"], key="rim")
+    with u2:
+        config_file = st.file_uploader("2. Config.csv", type=["csv"], key="config")
+    with u3:
+        input_file = st.file_uploader("3. Input.csv", type=["csv"], key="input")
+
+st.markdown("---")
+col_btn, _ = st.columns([1, 2])
+with col_btn:
+    execute_btn = st.button("🚀 BẮT ĐẦU QUY HOẠCH RF", type="primary", use_container_width=True)
+
+# ==========================================
+# 4. RF CORE CALCULATIONS & UTILS
 # ==========================================
 
 def haversine_np(lon1, lat1, lon2, lat2):
@@ -123,33 +246,21 @@ def get_directional_nearest_distance(site_lat, site_lon, cell_azimuth, neighbor_
     dists = haversine_np(site_lon, site_lat, neighbor_lons[in_cone_mask], neighbor_lats[in_cone_mask])
     return max(np.min(dists), 100.0)
 
-# ==========================================
-# MODULO & DISTANCE CHECKERS (NEW CORE)
-# ==========================================
-
-def check_pci_group_validity(candidate_group, site_lon, site_lat, assigned_pci_list, pci_min_dist, mod3_min_dist=3000.0, mod6_min_dist=2000.0):
-    """
-    Kiểm tra một nhóm PCI candidate (3 PCI) đối với các PCI đã được gán.
-    Trả về: (is_valid, min_pci_dist_found)
-    """
+def check_pci_group_validity(candidate_group, site_lon, site_lat, assigned_pci_list, pci_min_dist, mod3_min_dist, mod6_min_dist):
     if len(assigned_pci_list) == 0:
         return True, 1e9
 
     min_pci_dist = 1e9
-    
-    # Chuyển đổi tọa độ cartesian sang lat/lon cho các PCI đã gán
     assigned_lons = np.degrees(np.arctan2(assigned_pci_list[:, 1], assigned_pci_list[:, 0]))
     assigned_lats = np.degrees(np.arcsin(assigned_pci_list[:, 2] / 6371000.0))
     assigned_pcis = assigned_pci_list[:, 3].astype(int)
 
-    # Tính khoảng cách từ site hiện tại đến TẤT CẢ các cell đã gán PCI
     dists = haversine_np(site_lon, site_lat, assigned_lons, assigned_lats)
 
     for pci_candidate in candidate_group:
         cand_mod3 = pci_candidate % 3
         cand_mod6 = pci_candidate % 6
 
-        # 1. Kiểm tra Trùng PCI (PCI Collision)
         same_pci_mask = (assigned_pcis == pci_candidate)
         if np.any(same_pci_mask):
             d = np.min(dists[same_pci_mask])
@@ -158,14 +269,12 @@ def check_pci_group_validity(candidate_group, site_lon, site_lat, assigned_pci_l
             if d < pci_min_dist:
                 return False, min_pci_dist
 
-        # 2. Kiểm tra Xung đột Mod3 (PSS Collision) trong bán kính mod3_min_dist
         same_mod3_mask = ((assigned_pcis % 3) == cand_mod3)
         if np.any(same_mod3_mask):
             d_mod3 = np.min(dists[same_mod3_mask])
             if d_mod3 < mod3_min_dist:
                 return False, min_pci_dist
 
-        # 3. Kiểm tra Xung đột Mod6 (CRS Interference) trong bán kính mod6_min_dist
         same_mod6_mask = ((assigned_pcis % 6) == cand_mod6)
         if np.any(same_mod6_mask):
             d_mod6 = np.min(dists[same_mod6_mask])
@@ -175,33 +284,12 @@ def check_pci_group_validity(candidate_group, site_lon, site_lat, assigned_pci_l
     return True, min_pci_dist
 
 # ==========================================
-# 3. GIAO DIỆN BỐ TRÍ PHẲNG ĐỆT
-# ==========================================
-
-c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.2, 1])
-
-with c1:
-    rim_file = st.file_uploader("1. RIM.csv", type=["csv"], key="rim")
-
-with c2:
-    config_file = st.file_uploader("2. Config.csv", type=["csv"], key="config")
-
-with c3:
-    input_file = st.file_uploader("3. Input.csv", type=["csv"], key="input")
-
-with c4:
-    pci_min_dist = st.number_input("PCI Range (m)", min_value=1000, value=8000, step=500)
-    rsi_min_dist = st.number_input("RSI Range (m)", min_value=1000, value=8000, step=500)
-
-execute_btn = st.button("🚀 EXECUTE RF DESIGN", type="primary", use_container_width=False)
-
-# ==========================================
-# 4. PROCESSING LOGIC & DASHBOARD
+# 5. XỬ LÝ QUY HOẠCH & XUẤT KẾT QUẢ
 # ==========================================
 
 if execute_btn:
     if not rim_file or not config_file or not input_file:
-        st.error("⚠️ Vui lòng nạp đủ 3 file CSV đầu vào!")
+        st.error("⚠️ Vui lòng tải đủ 3 file CSV đầu vào (hoặc chọn dùng file mẫu)!")
     else:
         start_time = time.time()
         logs = []
@@ -210,11 +298,11 @@ if execute_btn:
             timestamp = time.strftime("[%H:%M:%S] ")
             logs.append(timestamp + msg)
 
-        status_box = st.status("⚙️ Đang thực thi quy hoạch...", expanded=True)
+        status_box = st.status("⚙️ Đang tiến hành phân bổ tham số RF...", expanded=True)
         progress_bar = st.progress(0)
 
         try:
-            status_box.write("Đang đọc file dữ liệu...")
+            status_box.write("Đang tải dữ liệu...")
             df_rim = pd.read_csv(rim_file)
             df_config = pd.read_csv(config_file)
             df_input = pd.read_csv(input_file)
@@ -223,11 +311,11 @@ if execute_btn:
             df_config.columns = df_config.columns.str.strip()
             df_input.columns = df_input.columns.str.strip()
 
-            add_log(f"Đọc dữ liệu thành công: RIM ({len(df_rim)} dòng), Config ({len(df_config)} dòng), Input ({len(df_input)} dòng).")
+            add_log(f"Đọc thành công: RIM ({len(df_rim)} dòng), Config ({len(df_config)} dòng), Input ({len(df_input)} dòng).")
             progress_bar.progress(10)
 
             df_existing = pd.merge(df_rim, df_config[['Cellname', 'TAC', 'PCI', 'RSI']], on='Cellname', how='inner')
-            add_log(f"Tổng hợp thành công {len(df_existing)} cell hiện hữu.")
+            add_log(f"Tổng hợp {len(df_existing)} cell mạng hiện hữu.")
             progress_bar.progress(20)
 
             existing_coords_cart = latlon_to_cartesian(df_existing['Lat'].values, df_existing['Lon'].values)
@@ -241,12 +329,12 @@ if execute_btn:
 
             unique_sites = df_input['Sitename'].unique()
             total_sites = len(unique_sites)
-            add_log(f"Bắt đầu quy hoạch cho {total_sites} site mới với ràng buộc Mod3/Mod6...")
+            add_log(f"Bắt đầu quy hoạch cho {total_sites} site mới...")
 
             output_rows = []
 
             for idx, site_name in enumerate(unique_sites):
-                status_box.write(f"Đang tính toán site {idx+1}/{total_sites}: {site_name}")
+                status_box.write(f"Đang xử lý site [{idx+1}/{total_sites}]: {site_name}")
                 site_cells = df_input[df_input['Sitename'] == site_name].copy()
                 site_lat = site_cells['Lat'].iloc[0]
                 site_lon = site_cells['Lon'].iloc[0]
@@ -269,19 +357,20 @@ if execute_btn:
                 else:
                     n_lats, n_lons, n_azs = np.array([]), np.array([]), np.array([])
 
-                # ==========================================
-                # LỰA CHỌN PCI AN TOÀN MOD3/MOD6
-                # ==========================================
+                # Phân bổ PCI
                 selected_pci_group = None
                 max_min_pci_dist = -1
                 best_fallback_pci_group = pci_groups[0]
+
+                mod3_dist_req = min(3000.0, pci_min_dist * mod3_factor)
+                mod6_dist_req = min(2000.0, pci_min_dist * mod6_factor)
 
                 for group in pci_groups:
                     is_valid, min_d = check_pci_group_validity(
                         group, site_lon, site_lat, assigned_pci_list, 
                         pci_min_dist=pci_min_dist, 
-                        mod3_min_dist=min(3000.0, pci_min_dist * 0.4), # Mod3 bảo vệ tối thiểu 40% bán kính tái sử dụng PCI
-                        mod6_min_dist=min(2000.0, pci_min_dist * 0.25) # Mod6 bảo vệ tối thiểu 25%
+                        mod3_min_dist=mod3_dist_req, 
+                        mod6_min_dist=mod6_dist_req
                     )
 
                     if min_d > max_min_pci_dist:
@@ -294,11 +383,9 @@ if execute_btn:
 
                 if selected_pci_group is None:
                     selected_pci_group = best_fallback_pci_group
-                    add_log(f"[WARNING] Site {site_name}: Hết PCI thỏa mãn tuyệt đối Mod3/Mod6 & Range {pci_min_dist}m! Chọn nhóm tốt nhất d_min = {int(max_min_pci_dist)}m")
+                    add_log(f"[CẢNH BÁO] Site {site_name}: Chọn nhóm PCI thay thế tốt nhất (d_min = {int(max_min_pci_dist)}m)")
 
-                # ==========================================
-                # LỰA CHỌN RSI
-                # ==========================================
+                # Phân bổ RSI
                 selected_rsi_group = None
                 max_min_rsi_dist = -1
                 best_fallback_rsi_group = rsi_groups[0]
@@ -332,11 +419,8 @@ if execute_btn:
 
                 if selected_rsi_group is None:
                     selected_rsi_group = best_fallback_rsi_group
-                    add_log(f"[WARNING] Site {site_name}: Hết RSI đạt chuẩn {rsi_min_dist}m! Đã chọn nhóm tốt nhất d_min = {int(max_min_rsi_dist)}m")
 
-                # ==========================================
-                # TÍNH TOÁN SECTOR & TILT
-                # ==========================================
+                # Tính Góc Azimuth & Tilt
                 site_assigned_azs = []
                 for cell_idx in range(min(3, len(site_cells))):
                     cell_row = site_cells.iloc[cell_idx].to_dict()
@@ -378,37 +462,39 @@ if execute_btn:
             progress_bar.progress(100)
             elapsed_time = round(time.time() - start_time, 2)
             
-            add_log("="*50)
-            add_log(f"THÀNH CÔNG: Hoàn thành quy hoạch cho {len(output_rows)} cells ({total_sites} sites) trong {elapsed_time}s.")
+            add_log(f"HOÀN THÀNH: Đã tính toán xong cho {len(output_rows)} cells ({total_sites} sites) trong {elapsed_time} giây.")
 
-            status_box.update(label="✅ Hoàn tất quy hoạch!", state="complete", expanded=False)
+            status_box.update(label="✅ Hoàn tất quy hoạch thành công!", state="complete", expanded=False)
             st.session_state["output_df"] = df_output
             st.session_state["logs"] = "\n".join(logs)
             st.session_state["exec_time"] = elapsed_time
 
         except Exception as e:
-            status_box.update(label="❌ Lỗi tính toán!", state="error")
-            st.error(f"Lỗi: {str(e)}")
+            status_box.update(label="❌ Có lỗi xảy ra trong quá trình xử lý!", state="error")
+            st.error(f"Chi tiết lỗi: {str(e)}")
 
-# HIỂN THỊ KẾT QUẢ VỚI CHIỀU CAO THU NHỎ
+# ==========================================
+# 6. THỐNG KÊ DASHBOARD & BẢNG KẾT QUẢ
+# ==========================================
 if "output_df" in st.session_state:
+    st.markdown("### 📊 Kết Quả Quy Hoạch")
     df_out = st.session_state["output_df"]
     exec_t = st.session_state.get("exec_time", 0)
     
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Site Mới", f"{df_out['Sitename'].nunique()}")
-    m2.metric("Tổng Cell", f"{len(df_out)}")
-    m3.metric("E-Tilt TB", f"{df_out['E-Tilt'].mean():.1f}°")
-    m4.metric("Thời Gian", f"{exec_t}s")
+    m2.metric("Tổng Cell Phân Bổ", f"{len(df_out)}")
+    m3.metric("Góc E-Tilt Trung Bình", f"{df_out['E-Tilt'].mean():.1f}°")
+    m4.metric("Thời Gian Xử Lý", f"{exec_t}s")
 
-    tab_data, tab_log = st.tabs(["📋 Kết Quả (Output Data)", "📜 Nhật Ký (Logs)"])
+    tab_data, tab_log = st.tabs(["📋 Danh Sách Kết Quả (Output Data)", "📜 Nhật Ký Xử Lý (Logs)"])
 
     with tab_data:
-        st.dataframe(df_out, use_container_width=True, height=360)
+        st.dataframe(df_out, use_container_width=True, height=380)
         csv_buffer = io.StringIO()
         df_out.to_csv(csv_buffer, index=False)
         st.download_button(
-            label="📥 Download Output_RF_Design.csv",
+            label="📥 Tải Về Kết Quả Quy Hoạch (Output_RF_Design.csv)",
             type="primary",
             data=csv_buffer.getvalue().encode('utf-8-sig'),
             file_name="Output_RF_Design.csv",
