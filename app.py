@@ -9,7 +9,7 @@ import streamlit as st
 from scipy.spatial import KDTree
 
 # ==========================================
-# 1. CẤU HÌNH TRANG & GIAO DIỆN
+# 1. CẤU HÌNH TRANG & GIAO DIỆN CHUYÊN NGHIỆP
 # ==========================================
 st.set_page_config(
     page_title="LTE RF Design Tool",
@@ -18,11 +18,24 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Custom CSS cho layout chuyên nghiệp
 st.markdown("""
     <style>
     .main {
         background-color: #f8f9fa;
     }
+    
+    /* Card container */
+    .custom-card {
+        background-color: #ffffff;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e9ecef;
+        margin-bottom: 20px;
+    }
+    
+    /* Custom Uploader Label */
     div[data-testid="stFileUploaderDropzoneInstructions"] > * {
         display: none !important;
     }
@@ -31,15 +44,19 @@ st.markdown("""
         font-size: 13px;
         color: #6c757d;
     }
+    
+    /* Section Title */
     .section-title {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #1e293b;
+        color: #4d648a;
         margin-bottom: 12px;
         display: flex;
         align-items: center;
         gap: 8px;
     }
+    
+    /* Primary Button Styling */
     div.stButton > button[kind="primary"] {
         background-color: #2563eb;
         border-color: #2563eb;
@@ -50,6 +67,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Header
 st.title("📡 LTE RF DESIGN AUTOMATION TOOL")
 st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI (Mod3/6 Safe), RSI, Azimuth, M-Tilt & Directional E-Tilt")
 st.markdown("---")
@@ -59,8 +77,10 @@ st.markdown("---")
 # ==========================================
 with st.sidebar:
     st.header("⚙️ Cấu Hình Tham Số")
-    pci_min_dist = st.number_input("PCI Min Range (m)", min_value=1000, value=5000, step=500, help="Khoảng cách tối thiểu tái sử dụng PCI")
-    rsi_min_dist = st.number_input("RSI Min Range (m)", min_value=1000, value=3000, step=500, help="Khoảng cách tối thiểu tái sử dụng RSI")
+    st.markdown("Thiết lập khoảng cách an toàn cho thuật toán phân bổ:")
+    
+    pci_min_dist = st.number_input("PCI Min Range (m)", min_value=1000, value=8000, step=500, help="Khoảng cách tối thiểu tái sử dụng PCI")
+    rsi_min_dist = st.number_input("RSI Min Range (m)", min_value=1000, value=8000, step=500, help="Khoảng cách tối thiểu tái sử dụng RSI")
     
     st.markdown("---")
     st.markdown("##### 🛡️ Ràng buộc Modulo")
@@ -73,15 +93,26 @@ with st.sidebar:
 # ==========================================
 # 3. TẢI FILE MẪU & INPUT DATA
 # ==========================================
+
+# Điền tên Repository GitHub chính xác của bạn vào đây nếu chạy xa (Remote Streamlit Cloud)
 GITHUB_USER = "MrQuynhDam"
-GITHUB_REPO = "test"
+GITHUB_REPO = "YOUR_REPO_NAME"  # Thay tên Repo của bạn vào đây nếu dùng online
 
 @st.cache_data
 def get_sample_file_bytes(filename):
+    # 1. Ưu tiên kiểm tra file cục bộ trong cùng thư mục
     if os.path.exists(filename):
         with open(filename, "rb") as f:
             return f.read()
+            
+    # 2. Tự động tìm thử các tên biến thể phổ biến nếu có
+    possible_names = [filename, filename.replace("_Sample", "S_Sample")]
+    for p_name in possible_names:
+        if os.path.exists(p_name):
+            with open(p_name, "rb") as f:
+                return f.read()
 
+    # 3. Fallback tải qua GitHub URL
     url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/{filename}"
     try:
         response = requests.get(url, timeout=5)
@@ -89,13 +120,15 @@ def get_sample_file_bytes(filename):
             return response.content
     except Exception:
         pass
+
     return None
 
 col_left, col_right = st.columns([1, 2], gap="medium")
 
+# --- BÊN TRÁI: DOWLOAD FILE MẪU ---
 with col_left:
-    st.markdown('<div class="section-title">📥 1. Tải Tệp Mẫu (Sample Files)</div>', unsafe_allow_html=True)
-    st.info("Tải các file định dạng chuẩn mẫu để kiểm tra hệ thống:")
+    st.markdown('<div class="section-title">📥 1. Download Sample Files</div>', unsafe_allow_html=True)
+    st.info("Download sample files:")
     
     sample_files = {
         "RIMS_Sample.csv": "File thông tin Trạm RIM hiện hữu",
@@ -117,8 +150,10 @@ with col_left:
         else:
             st.button(f"❌ Không tìm thấy {fname}", disabled=True, use_container_width=True)
 
+# --- BÊN PHẢI: UPLOAD FILE ĐẦU VÀO ---
 with col_right:
-    st.markdown('<div class="section-title">📤 2. Tải Dữ Liệu Đầu Vào (Input Upload)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">📤 2. Upload input files</div>', unsafe_allow_html=True)
+    
     u1, u2, u3 = st.columns(3)
     with u1:
         rim_file = st.file_uploader("1. RIMS.csv", type=["csv"], key="rim")
@@ -133,7 +168,7 @@ with col_btn:
     execute_btn = st.button("🚀 BẮT ĐẦU QUY HOẠCH RF", type="primary", use_container_width=True)
 
 # ==========================================
-# 4. HÀM TÍNH TOÁN CORE RF
+# 4. RF CORE CALCULATIONS & UTILS
 # ==========================================
 
 def haversine_np(lon1, lat1, lon2, lat2):
@@ -193,6 +228,7 @@ def calculate_optimum_azimuth(site_lat, site_lon, neighbor_lats, neighbor_lons, 
         angle_diff1 = np.abs((az - bearings_to_neighbors + 180) % 360 - 180)
         neighbor_boresight = (bearings_to_neighbors + 180) % 360
         angle_diff2 = np.abs((neighbor_azimuths - neighbor_boresight + 180) % 360 - 180)
+        
         penalty = np.sum(np.exp(-((angle_diff1**2 + angle_diff2**2) / (2 * 30**2))))
         score = -penalty
 
@@ -226,52 +262,46 @@ def check_pci_group_validity(candidate_group, site_lon, site_lat, assigned_pci_l
     if len(assigned_pci_list) == 0:
         return True, 1e9
 
+    min_pci_dist = 1e9
     assigned_lons = np.degrees(np.arctan2(assigned_pci_list[:, 1], assigned_pci_list[:, 0]))
-    assigned_lats = np.degrees(np.arcsin(np.clip(assigned_pci_list[:, 2] / 6371000.0, -1.0, 1.0)))
+    assigned_lats = np.degrees(np.arcsin(assigned_pci_list[:, 2] / 6371000.0))
     assigned_pcis = assigned_pci_list[:, 3].astype(int)
 
     dists = haversine_np(site_lon, site_lat, assigned_lons, assigned_lats)
-
-    group_min_dist = 1e9
-    has_violation = False
 
     for pci_candidate in candidate_group:
         cand_mod3 = pci_candidate % 3
         cand_mod6 = pci_candidate % 6
 
-        # 1. Trùng PCI
         same_pci_mask = (assigned_pcis == pci_candidate)
         if np.any(same_pci_mask):
-            d_pci = np.min(dists[same_pci_mask])
-            group_min_dist = min(group_min_dist, d_pci)
-            if d_pci < pci_min_dist:
-                has_violation = True
+            d = np.min(dists[same_pci_mask])
+            if d < min_pci_dist:
+                min_pci_dist = d
+            if d < pci_min_dist:
+                return False, min_pci_dist
 
-        # 2. Xung đột Mod3
         same_mod3_mask = ((assigned_pcis % 3) == cand_mod3)
         if np.any(same_mod3_mask):
             d_mod3 = np.min(dists[same_mod3_mask])
-            group_min_dist = min(group_min_dist, d_mod3)
             if d_mod3 < mod3_min_dist:
-                has_violation = True
+                return False, min_pci_dist
 
-        # 3. Xung đột Mod6
         same_mod6_mask = ((assigned_pcis % 6) == cand_mod6)
         if np.any(same_mod6_mask):
             d_mod6 = np.min(dists[same_mod6_mask])
-            group_min_dist = min(group_min_dist, d_mod6)
             if d_mod6 < mod6_min_dist:
-                has_violation = True
+                return False, min_pci_dist
 
-    return (not has_violation), group_min_dist
+    return True, min_pci_dist
 
 # ==========================================
-# 5. XỬ LÝ QUY HOẠCH (MAX-MIN OPTIMIZATION)
+# 5. XỬ LÝ QUY HOẠCH & XUẤT KẾT QUẢ
 # ==========================================
 
 if execute_btn:
     if not rim_file or not config_file or not input_file:
-        st.error("⚠️ Vui lòng tải đủ 3 file CSV đầu vào!")
+        st.error("⚠️ Vui lòng tải đủ 3 file CSV đầu vào (hoặc chọn dùng file mẫu)!")
     else:
         start_time = time.time()
         logs = []
@@ -284,7 +314,7 @@ if execute_btn:
         progress_bar = st.progress(0)
 
         try:
-            status_box.write("Đang đọc dữ liệu file...")
+            status_box.write("Đang tải dữ liệu...")
             df_rim = pd.read_csv(rim_file)
             df_config = pd.read_csv(config_file)
             df_input = pd.read_csv(input_file)
@@ -293,21 +323,20 @@ if execute_btn:
             df_config.columns = df_config.columns.str.strip()
             df_input.columns = df_input.columns.str.strip()
 
-            add_log(f"Đọc dữ liệu thành công: RIM ({len(df_rim)} dòng), Config ({len(df_config)} dòng), Input ({len(df_input)} dòng).")
+            add_log(f"Đọc thành công: RIM ({len(df_rim)} dòng), Config ({len(df_config)} dòng), Input ({len(df_input)} dòng).")
             progress_bar.progress(10)
 
             df_existing = pd.merge(df_rim, df_config[['Cellname', 'TAC', 'PCI', 'RSI']], on='Cellname', how='inner')
-            add_log(f"Tổng hợp thành công {len(df_existing)} cell hiện hữu.")
+            add_log(f"Tổng hợp {len(df_existing)} cell mạng hiện hữu.")
             progress_bar.progress(20)
 
             existing_coords_cart = latlon_to_cartesian(df_existing['Lat'].values, df_existing['Lon'].values)
             kdtree_existing = KDTree(existing_coords_cart)
 
-            # Khởi tạo danh sách PCI và RSI đã cấp phát
             assigned_pci_list = np.column_stack((existing_coords_cart, df_existing['PCI'].values))
             assigned_rsi_list = np.column_stack((existing_coords_cart, df_existing['RSI'].values))
 
-            pci_groups = [list(range(i, i+3)) for i in range(0, 504, 3)]
+            pci_groups = [list(range(i, i+3)) for i in range(0, 448, 3)]
             rsi_groups = [[r, (r+6)%643, (r+12)%643] for r in range(0, 643-12, 6)]
 
             unique_sites = df_input['Sitename'].unique()
@@ -340,15 +369,13 @@ if execute_btn:
                 else:
                     n_lats, n_lons, n_azs = np.array([]), np.array([]), np.array([])
 
-                # ==========================================
-                # THUẬT TOÁN TÌM NHÓM PCI TỐI ƯU NHẤT (MAX-MIN)
-                # ==========================================
+                # Phân bổ PCI
+                selected_pci_group = None
+                max_min_pci_dist = -1
+                best_fallback_pci_group = pci_groups[0]
+
                 mod3_dist_req = min(3000.0, pci_min_dist * mod3_factor)
                 mod6_dist_req = min(2000.0, pci_min_dist * mod6_factor)
-
-                valid_candidate_groups = []
-                best_fallback_pci_group = pci_groups[0]
-                max_min_pci_dist = -1
 
                 for group in pci_groups:
                     is_valid, min_d = check_pci_group_validity(
@@ -363,22 +390,17 @@ if execute_btn:
                         best_fallback_pci_group = group
 
                     if is_valid:
-                        valid_candidate_groups.append((group, min_d))
+                        selected_pci_group = group
+                        break
 
-                if len(valid_candidate_groups) > 0:
-                    # Chọn nhóm hợp lệ có khoảng cách min_d lớn nhất
-                    valid_candidate_groups.sort(key=lambda x: x[1], reverse=True)
-                    selected_pci_group = valid_candidate_groups[0][0]
-                else:
+                if selected_pci_group is None:
                     selected_pci_group = best_fallback_pci_group
-                    add_log(f"[CẢNH BÁO] Site {site_name}: Chọn nhóm dự phòng tối ưu d_min = {int(max_min_pci_dist)}m")
+                    add_log(f"[CẢNH BÁO] Site {site_name}: Chọn nhóm PCI thay thế tốt nhất (d_min = {int(max_min_pci_dist)}m)")
 
-                # ==========================================
-                # THUẬT TOÁN TÌM NHÓM RSI TỐI ƯU NHẤT
-                # ==========================================
-                valid_rsi_groups = []
-                best_fallback_rsi_group = rsi_groups[0]
+                # Phân bổ RSI
+                selected_rsi_group = None
                 max_min_rsi_dist = -1
+                best_fallback_rsi_group = rsi_groups[0]
 
                 for group in rsi_groups:
                     min_dist_for_this_group = 1e9
@@ -389,7 +411,7 @@ if execute_btn:
                             dists = haversine_np(
                                 site_lon, site_lat, 
                                 np.degrees(np.arctan2(matched_rsis[:,1], matched_rsis[:,0])), 
-                                np.degrees(np.arcsin(np.clip(matched_rsis[:,2]/6371000.0, -1.0, 1.0)))
+                                np.degrees(np.arcsin(matched_rsis[:,2]/6371000.0))
                             )
                             current_min_d = np.min(dists)
                             if current_min_d < min_dist_for_this_group:
@@ -404,17 +426,13 @@ if execute_btn:
                         best_fallback_rsi_group = group
 
                     if not conflict:
-                        valid_rsi_groups.append((group, min_dist_for_this_group))
+                        selected_rsi_group = group
+                        break
 
-                if len(valid_rsi_groups) > 0:
-                    valid_rsi_groups.sort(key=lambda x: x[1], reverse=True)
-                    selected_rsi_group = valid_rsi_groups[0][0]
-                else:
+                if selected_rsi_group is None:
                     selected_rsi_group = best_fallback_rsi_group
 
-                # ==========================================
-                # TÍNH SECTOR, AZIMUTH VÀ TILT
-                # ==========================================
+                # Tính Góc Azimuth & Tilt
                 site_assigned_azs = []
                 for cell_idx in range(min(3, len(site_cells))):
                     cell_row = site_cells.iloc[cell_idx].to_dict()
@@ -437,24 +455,17 @@ if execute_btn:
                     total_tilt = math.degrees(math.atan(ant_height / d_coverage))
                     e_tilt = max(0, int(round(total_tilt - m_tilt)))
 
-                    cell_pci = int(selected_pci_group[cell_idx])
-                    cell_rsi = int(selected_rsi_group[cell_idx])
-
                     cell_row['TAC'] = int(assigned_tac)
-                    cell_row['PCI'] = cell_pci
-                    cell_row['RSI'] = cell_rsi
+                    cell_row['PCI'] = int(selected_pci_group[cell_idx])
+                    cell_row['RSI'] = int(selected_rsi_group[cell_idx])
                     cell_row['Azimuth'] = int(opt_azimuth)
                     cell_row['M-Tilt'] = int(m_tilt)
                     cell_row['E-Tilt'] = int(e_tilt)
 
                     output_rows.append(cell_row)
 
-                    # Đẩy ngay PCI vừa gán vào mảng bộ nhớ cho các site tiếp theo
-                    new_pci_node = np.array([[site_cart[0], site_cart[1], site_cart[2], cell_pci]])
-                    new_rsi_node = np.array([[site_cart[0], site_cart[1], site_cart[2], cell_rsi]])
-
-                    assigned_pci_list = np.vstack([assigned_pci_list, new_pci_node])
-                    assigned_rsi_list = np.vstack([assigned_rsi_list, new_rsi_node])
+                    assigned_pci_list = np.vstack([assigned_pci_list, [*site_cart, cell_row['PCI']]])
+                    assigned_rsi_list = np.vstack([assigned_rsi_list, [*site_cart, cell_row['RSI']]])
 
                 progress = 20 + int(((idx + 1) / total_sites) * 70)
                 progress_bar.progress(progress)
@@ -463,7 +474,7 @@ if execute_btn:
             progress_bar.progress(100)
             elapsed_time = round(time.time() - start_time, 2)
             
-            add_log(f"HOÀN THÀNH: Đã quy hoạch xong cho {len(output_rows)} cells ({total_sites} sites) trong {elapsed_time}s.")
+            add_log(f"HOÀN THÀNH: Đã tính toán xong cho {len(output_rows)} cells ({total_sites} sites) trong {elapsed_time} giây.")
 
             status_box.update(label="✅ Hoàn tất quy hoạch thành công!", state="complete", expanded=False)
             st.session_state["output_df"] = df_output
@@ -471,11 +482,11 @@ if execute_btn:
             st.session_state["exec_time"] = elapsed_time
 
         except Exception as e:
-            status_box.update(label="❌ Có lỗi xảy ra!", state="error")
+            status_box.update(label="❌ Có lỗi xảy ra trong quá trình xử lý!", state="error")
             st.error(f"Chi tiết lỗi: {str(e)}")
 
 # ==========================================
-# 6. KẾT QUẢ VÀ DASHBOARD
+# 6. THỐNG KÊ DASHBOARD & BẢNG KẾT QUẢ
 # ==========================================
 if "output_df" in st.session_state:
     st.markdown("### 📊 Kết Quả Quy Hoạch")
