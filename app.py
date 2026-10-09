@@ -9,7 +9,7 @@ import streamlit as st
 from scipy.spatial import KDTree
 
 # ==========================================
-# 1. CẤU HÌNH TRANG & GIAO DIỆN CHUYÊN NGHIỆP
+# 1. CẤU HÌNH TRANG & GIAO DIỆN
 # ==========================================
 st.set_page_config(
     page_title="LTE RF Design Tool",
@@ -266,7 +266,7 @@ def check_pci_group_validity(candidate_group, site_lon, site_lat, assigned_pci_l
     return (not has_violation), group_min_dist
 
 # ==========================================
-# 5. XỬ LÝ QUY HOẠCH (SỬA LOGIC CẤP PHÁT XOAY VÒNG)
+# 5. XỬ LÝ QUY HOẠCH (MAX-MIN OPTIMIZATION)
 # ==========================================
 
 if execute_btn:
@@ -303,18 +303,12 @@ if execute_btn:
             existing_coords_cart = latlon_to_cartesian(df_existing['Lat'].values, df_existing['Lon'].values)
             kdtree_existing = KDTree(existing_coords_cart)
 
-            # Khởi tạo danh sách PCI và RSI đã được cấp phát
+            # Khởi tạo danh sách PCI và RSI đã cấp phát
             assigned_pci_list = np.column_stack((existing_coords_cart, df_existing['PCI'].values))
             assigned_rsi_list = np.column_stack((existing_coords_cart, df_existing['RSI'].values))
 
-            pci_groups = [list(range(i, i+3)) for i in range(0, 448, 3)]
+            pci_groups = [list(range(i, i+3)) for i in range(0, 504, 3)]
             rsi_groups = [[r, (r+6)%643, (r+12)%643] for r in range(0, 643-12, 6)]
-
-            total_pci_groups = len(pci_groups)
-            total_rsi_groups = len(rsi_groups)
-            
-            pci_group_idx = 0  # Con trỏ xoay vòng PCI
-            rsi_group_idx = 0  # Con trỏ xoay vòng RSI
 
             unique_sites = df_input['Sitename'].unique()
             total_sites = len(unique_sites)
@@ -346,18 +340,17 @@ if execute_btn:
                 else:
                     n_lats, n_lons, n_azs = np.array([]), np.array([]), np.array([])
 
-                # --- PHÂN BỔ PCI CÓ XOAY VÒNG CON TRỎ ---
-                selected_pci_group = None
-                max_min_pci_dist = -1
-                best_fallback_pci_group = pci_groups[pci_group_idx]
-
+                # ==========================================
+                # THUẬT TOÁN TÌM NHÓM PCI TỐI ƯU NHẤT (MAX-MIN)
+                # ==========================================
                 mod3_dist_req = min(3000.0, pci_min_dist * mod3_factor)
                 mod6_dist_req = min(2000.0, pci_min_dist * mod6_factor)
 
-                for offset in range(total_pci_groups):
-                    curr_i = (pci_group_idx + offset) % total_pci_groups
-                    group = pci_groups[curr_i]
+                valid_candidate_groups = []
+                best_fallback_pci_group = pci_groups[0]
+                max_min_pci_dist = -1
 
+                for group in pci_groups:
                     is_valid, min_d = check_pci_group_validity(
                         group, site_lon, site_lat, assigned_pci_list, 
                         pci_min_dist=pci_min_dist, 
@@ -370,24 +363,24 @@ if execute_btn:
                         best_fallback_pci_group = group
 
                     if is_valid:
-                        selected_pci_group = group
-                        pci_group_idx = (curr_i + 1) % total_pci_groups  # Cập nhật con trỏ xoay vòng
-                        break
+                        valid_candidate_groups.append((group, min_d))
 
-                if selected_pci_group is None:
+                if len(valid_candidate_groups) > 0:
+                    # Chọn nhóm hợp lệ có khoảng cách min_d lớn nhất
+                    valid_candidate_groups.sort(key=lambda x: x[1], reverse=True)
+                    selected_pci_group = valid_candidate_groups[0][0]
+                else:
                     selected_pci_group = best_fallback_pci_group
-                    pci_group_idx = (pci_groups.index(best_fallback_pci_group) + 1) % total_pci_groups
                     add_log(f"[CẢNH BÁO] Site {site_name}: Chọn nhóm dự phòng tối ưu d_min = {int(max_min_pci_dist)}m")
 
-                # --- PHÂN BỔ RSI CÓ XOAY VÒNG CON TRỎ ---
-                selected_rsi_group = None
+                # ==========================================
+                # THUẬT TOÁN TÌM NHÓM RSI TỐI ƯU NHẤT
+                # ==========================================
+                valid_rsi_groups = []
+                best_fallback_rsi_group = rsi_groups[0]
                 max_min_rsi_dist = -1
-                best_fallback_rsi_group = rsi_groups[rsi_group_idx]
 
-                for offset in range(total_rsi_groups):
-                    curr_i = (rsi_group_idx + offset) % total_rsi_groups
-                    group = rsi_groups[curr_i]
-
+                for group in rsi_groups:
                     min_dist_for_this_group = 1e9
                     conflict = False
                     for rsi_val in group:
@@ -411,15 +404,17 @@ if execute_btn:
                         best_fallback_rsi_group = group
 
                     if not conflict:
-                        selected_rsi_group = group
-                        rsi_group_idx = (curr_i + 1) % total_rsi_groups  # Cập nhật con trỏ xoay vòng
-                        break
+                        valid_rsi_groups.append((group, min_dist_for_this_group))
 
-                if selected_rsi_group is None:
+                if len(valid_rsi_groups) > 0:
+                    valid_rsi_groups.sort(key=lambda x: x[1], reverse=True)
+                    selected_rsi_group = valid_rsi_groups[0][0]
+                else:
                     selected_rsi_group = best_fallback_rsi_group
-                    rsi_group_idx = (rsi_groups.index(best_fallback_rsi_group) + 1) % total_rsi_groups
 
-                # --- TÍNH SECTOR, AZIMUTH VÀ TILT ---
+                # ==========================================
+                # TÍNH SECTOR, AZIMUTH VÀ TILT
+                # ==========================================
                 site_assigned_azs = []
                 for cell_idx in range(min(3, len(site_cells))):
                     cell_row = site_cells.iloc[cell_idx].to_dict()
@@ -454,7 +449,7 @@ if execute_btn:
 
                     output_rows.append(cell_row)
 
-                    # Cập nhật danh sách PCI và RSI đã gán vào mảng bộ nhớ
+                    # Đẩy ngay PCI vừa gán vào mảng bộ nhớ cho các site tiếp theo
                     new_pci_node = np.array([[site_cart[0], site_cart[1], site_cart[2], cell_pci]])
                     new_rsi_node = np.array([[site_cart[0], site_cart[1], site_cart[2], cell_rsi]])
 
