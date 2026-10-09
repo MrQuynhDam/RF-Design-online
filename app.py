@@ -77,7 +77,7 @@ st.markdown("---")
 # ==========================================
 with st.sidebar:
     st.header("⚙️ Cấu Hình Tham Số")
-    st.markdown("Thiết lập khoảng cách an toàn cho thuật toán phân bổ:")
+    st.markdown("Thiết lập khoảng cách an toàn PCI/RSI:")
     
     pci_min_dist = st.number_input("PCI Min Range (m)", min_value=1000, value=8000, step=500, help="Khoảng cách tối thiểu tái sử dụng PCI")
     rsi_min_dist = st.number_input("RSI Min Range (m)", min_value=1000, value=8000, step=500, help="Khoảng cách tối thiểu tái sử dụng RSI")
