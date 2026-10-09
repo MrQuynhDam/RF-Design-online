@@ -25,7 +25,6 @@ st.markdown("""
         background-color: #f8f9fa;
     }
     
-    /* Card container */
     .custom-card {
         background-color: #ffffff;
         border-radius: 10px;
@@ -35,7 +34,6 @@ st.markdown("""
         margin-bottom: 20px;
     }
     
-    /* Custom Uploader Label */
     div[data-testid="stFileUploaderDropzoneInstructions"] > * {
         display: none !important;
     }
@@ -45,7 +43,6 @@ st.markdown("""
         color: #6c757d;
     }
     
-    /* Section Title */
     .section-title {
         font-size: 1.1rem;
         font-weight: 600;
@@ -56,7 +53,6 @@ st.markdown("""
         gap: 8px;
     }
     
-    /* Primary Button Styling */
     div.stButton > button[kind="primary"] {
         background-color: #2563eb;
         border-color: #2563eb;
@@ -67,9 +63,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Header
 st.title("📡 LTE RF DESIGN AUTOMATION TOOL")
-st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI (Mod3/6 Safe), RSI, Azimuth, M-Tilt & Directional E-Tilt")
+st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI (Best-Fit Range 0-449), RSI, Azimuth, M-Tilt & Directional E-Tilt")
 st.markdown("---")
 
 # ==========================================
@@ -77,7 +72,7 @@ st.markdown("---")
 # ==========================================
 with st.sidebar:
     st.header("⚙️ Cấu Hình Tham Số")
-    st.markdown("Thiết lập khoảng cách an toàn cho thuật toán phân bổ:")
+    st.markdown("Thiết lập khoảng cách an toàn cho thuật toán phân bổ Best-Fit:")
     
     pci_min_dist = st.number_input("PCI Min Range (m)", min_value=1000, value=8000, step=500, help="Khoảng cách tối thiểu tái sử dụng PCI")
     rsi_min_dist = st.number_input("RSI Min Range (m)", min_value=1000, value=8000, step=500, help="Khoảng cách tối thiểu tái sử dụng RSI")
@@ -93,26 +88,21 @@ with st.sidebar:
 # ==========================================
 # 3. TẢI FILE MẪU & INPUT DATA
 # ==========================================
-
-# Điền tên Repository GitHub chính xác của bạn vào đây nếu chạy xa (Remote Streamlit Cloud)
 GITHUB_USER = "MrQuynhDam"
-GITHUB_REPO = "YOUR_REPO_NAME"  # Thay tên Repo của bạn vào đây nếu dùng online
+GITHUB_REPO = "YOUR_REPO_NAME"
 
 @st.cache_data
 def get_sample_file_bytes(filename):
-    # 1. Ưu tiên kiểm tra file cục bộ trong cùng thư mục
     if os.path.exists(filename):
         with open(filename, "rb") as f:
             return f.read()
             
-    # 2. Tự động tìm thử các tên biến thể phổ biến nếu có
     possible_names = [filename, filename.replace("_Sample", "S_Sample")]
     for p_name in possible_names:
         if os.path.exists(p_name):
             with open(p_name, "rb") as f:
                 return f.read()
 
-    # 3. Fallback tải qua GitHub URL
     url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/{filename}"
     try:
         response = requests.get(url, timeout=5)
@@ -125,7 +115,6 @@ def get_sample_file_bytes(filename):
 
 col_left, col_right = st.columns([1, 2], gap="medium")
 
-# --- BÊN TRÁI: DOWLOAD FILE MẪU ---
 with col_left:
     st.markdown('<div class="section-title">📥 1. Download Sample Files</div>', unsafe_allow_html=True)
         
@@ -149,7 +138,6 @@ with col_left:
         else:
             st.button(f"❌ Không tìm thấy {fname}", disabled=True, use_container_width=True)
 
-# --- BÊN PHẢI: UPLOAD FILE ĐẦU VÀO ---
 with col_right:
     st.markdown('<div class="section-title">📤 2. Upload input files</div>', unsafe_allow_html=True)
     
@@ -176,7 +164,7 @@ def haversine_np(lon1, lat1, lon2, lat2):
     dlat = lat2 - lat1
     a = np.sin(dlat/2.0)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2.0)**2
     c = 2 * np.arcsin(np.sqrt(a))
-    return c * 6367000.0
+    return c * 6371000.0
 
 def latlon_to_cartesian(lat, lon):
     R = 6371000.0
@@ -187,34 +175,36 @@ def latlon_to_cartesian(lat, lon):
     z = R * np.sin(lat_rad)
     return np.column_stack((x, y, z))
 
-def calculate_optimum_azimuth(site_lat, site_lon, neighbor_lats, neighbor_lons, neighbor_azimuths, sector_idx, assigned_site_azimuths=[]):
-    default_azimuths = [0, 120, 240]
-    best_azimuth = default_azimuths[sector_idx]
+def calculate_optimum_azimuth(site_lat, site_lon, neighbor_lats, neighbor_lons, neighbor_azimuths, sector_idx, total_sectors=3, assigned_site_azimuths=[]):
+    base_angle = 360.0 / total_sectors
+    default_azimuth = int((sector_idx * base_angle) % 360)
+    best_azimuth = default_azimuth
     max_score = -1e9
 
-    if sector_idx == 0:
-        candidates = list(range(300, 360, 5)) + list(range(0, 65, 5))
-    elif sector_idx == 1:
-        candidates = list(range(60, 185, 5))
+    start_angle = int((default_azimuth - 30) % 360)
+    end_angle = int((default_azimuth + 35) % 360)
+    
+    if start_angle < end_angle:
+        candidates = list(range(start_angle, end_angle, 5))
     else:
-        candidates = list(range(180, 305, 5))
+        candidates = list(range(start_angle, 360, 5)) + list(range(0, end_angle, 5))
 
     valid_candidates = []
     for az in candidates:
         valid = True
         for prev_az in assigned_site_azimuths:
             diff = np.abs((az - prev_az + 180) % 360 - 180)
-            if diff < 90:
+            if diff < (360 / total_sectors) * 0.6:
                 valid = False
                 break
         if valid:
             valid_candidates.append(az)
 
     if len(valid_candidates) == 0:
-        valid_candidates = candidates
+        valid_candidates = candidates if len(candidates) > 0 else [default_azimuth]
 
     if len(neighbor_lats) == 0:
-        return min(valid_candidates, key=lambda x: np.abs((x - best_azimuth + 180) % 360 - 180))
+        return min(valid_candidates, key=lambda x: np.abs((x - default_azimuth + 180) % 360 - 180))
 
     dlat = np.radians(neighbor_lats - site_lat)
     dlon = np.radians(neighbor_lons - site_lon)
@@ -263,7 +253,7 @@ def check_pci_group_validity(candidate_group, site_lon, site_lat, assigned_pci_l
 
     min_pci_dist = 1e9
     assigned_lons = np.degrees(np.arctan2(assigned_pci_list[:, 1], assigned_pci_list[:, 0]))
-    assigned_lats = np.degrees(np.arcsin(assigned_pci_list[:, 2] / 6371000.0))
+    assigned_lats = np.degrees(np.arcsin(np.clip(assigned_pci_list[:, 2] / 6371000.0, -1.0, 1.0)))
     assigned_pcis = assigned_pci_list[:, 3].astype(int)
 
     dists = haversine_np(site_lon, site_lat, assigned_lons, assigned_lats)
@@ -335,12 +325,13 @@ if execute_btn:
             assigned_pci_list = np.column_stack((existing_coords_cart, df_existing['PCI'].values))
             assigned_rsi_list = np.column_stack((existing_coords_cart, df_existing['RSI'].values))
 
-            pci_groups = [list(range(i, i+3)) for i in range(0, 448, 3)]
+            # Giới hạn dải PCI từ 0 đến 449 (450 giá trị -> 150 nhóm 3)
+            pci_groups = [list(range(i, i+3)) for i in range(0, 450, 3)]
             rsi_groups = [[r, (r+6)%643, (r+12)%643] for r in range(0, 643-12, 6)]
 
             unique_sites = df_input['Sitename'].unique()
             total_sites = len(unique_sites)
-            add_log(f"Bắt đầu quy hoạch cho {total_sites} site mới...")
+            add_log(f"Bắt đầu quy hoạch cho {total_sites} site mới (PCI Best-Fit trong dải 0-449)...")
 
             output_rows = []
 
@@ -368,10 +359,14 @@ if execute_btn:
                 else:
                     n_lats, n_lons, n_azs = np.array([]), np.array([]), np.array([])
 
-                # Phân bổ PCI
+                # ========================================================
+                # PHÂN BỔ PCI - STRATEGY: BEST-FIT (RANGE 0 - 449)
+                # ========================================================
                 selected_pci_group = None
-                max_min_pci_dist = -1
+                max_valid_dist = -1
+
                 best_fallback_pci_group = pci_groups[0]
+                max_fallback_dist = -1
 
                 mod3_dist_req = min(3000.0, pci_min_dist * mod3_factor)
                 mod6_dist_req = min(2000.0, pci_min_dist * mod6_factor)
@@ -384,33 +379,39 @@ if execute_btn:
                         mod6_min_dist=mod6_dist_req
                     )
 
-                    if min_d > max_min_pci_dist:
-                        max_min_pci_dist = min_d
-                        best_fallback_pci_group = group
-
                     if is_valid:
-                        selected_pci_group = group
-                        break
+                        if min_d > max_valid_dist:
+                            max_valid_dist = min_d
+                            selected_pci_group = group
+                    else:
+                        if min_d > max_fallback_dist:
+                            max_fallback_dist = min_d
+                            best_fallback_pci_group = group
 
                 if selected_pci_group is None:
                     selected_pci_group = best_fallback_pci_group
-                    add_log(f"[CẢNH BÁO] Site {site_name}: Chọn nhóm PCI thay thế tốt nhất (d_min = {int(max_min_pci_dist)}m)")
+                    add_log(f"[CẢNH BÁO] Site {site_name}: Chọn nhóm PCI dự phòng tốt nhất (d_min = {int(max_fallback_dist)}m)")
 
-                # Phân bổ RSI
+                # ========================================================
+                # PHÂN BỔ RSI - STRATEGY: BEST-FIT
+                # ========================================================
                 selected_rsi_group = None
-                max_min_rsi_dist = -1
+                max_valid_rsi_dist = -1
+
                 best_fallback_rsi_group = rsi_groups[0]
+                max_fallback_rsi_dist = -1
 
                 for group in rsi_groups:
                     min_dist_for_this_group = 1e9
                     conflict = False
+
                     for rsi_val in group:
                         matched_rsis = assigned_rsi_list[assigned_rsi_list[:, 3] == rsi_val]
                         if len(matched_rsis) > 0:
                             dists = haversine_np(
                                 site_lon, site_lat, 
                                 np.degrees(np.arctan2(matched_rsis[:,1], matched_rsis[:,0])), 
-                                np.degrees(np.arcsin(matched_rsis[:,2]/6371000.0))
+                                np.degrees(np.arcsin(np.clip(matched_rsis[:,2]/6371000.0, -1.0, 1.0)))
                             )
                             current_min_d = np.min(dists)
                             if current_min_d < min_dist_for_this_group:
@@ -420,25 +421,29 @@ if execute_btn:
                         else:
                             min_dist_for_this_group = 1e9
 
-                    if min_dist_for_this_group > max_min_rsi_dist:
-                        max_min_rsi_dist = min_dist_for_this_group
-                        best_fallback_rsi_group = group
-
                     if not conflict:
-                        selected_rsi_group = group
-                        break
+                        if min_dist_for_this_group > max_valid_rsi_dist:
+                            max_valid_rsi_dist = min_dist_for_this_group
+                            selected_rsi_group = group
+                    else:
+                        if min_dist_for_this_group > max_fallback_rsi_dist:
+                            max_fallback_rsi_dist = min_dist_for_this_group
+                            best_fallback_rsi_group = group
 
                 if selected_rsi_group is None:
                     selected_rsi_group = best_fallback_rsi_group
 
                 # Tính Góc Azimuth & Tilt
                 site_assigned_azs = []
-                for cell_idx in range(min(3, len(site_cells))):
+                num_cells = len(site_cells)
+
+                for cell_idx in range(num_cells):
                     cell_row = site_cells.iloc[cell_idx].to_dict()
 
                     opt_azimuth = calculate_optimum_azimuth(
                         site_lat, site_lon, n_lats, n_lons, n_azs, 
                         sector_idx=cell_idx,
+                        total_sectors=num_cells,
                         assigned_site_azimuths=site_assigned_azs
                     )
                     site_assigned_azs.append(opt_azimuth)
@@ -455,8 +460,8 @@ if execute_btn:
                     e_tilt = max(0, int(round(total_tilt - m_tilt)))
 
                     cell_row['TAC'] = int(assigned_tac)
-                    cell_row['PCI'] = int(selected_pci_group[cell_idx])
-                    cell_row['RSI'] = int(selected_rsi_group[cell_idx])
+                    cell_row['PCI'] = int(selected_pci_group[cell_idx % len(selected_pci_group)])
+                    cell_row['RSI'] = int(selected_rsi_group[cell_idx % len(selected_rsi_group)])
                     cell_row['Azimuth'] = int(opt_azimuth)
                     cell_row['M-Tilt'] = int(m_tilt)
                     cell_row['E-Tilt'] = int(e_tilt)
