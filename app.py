@@ -49,7 +49,7 @@ st.markdown("""
     .section-title {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #1e293b;
+        color: #4d648a;
         margin-bottom: 12px;
         display: flex;
         align-items: center;
@@ -69,7 +69,7 @@ st.markdown("""
 
 # Header
 st.title("📡 LTE RF DESIGN AUTOMATION TOOL")
-st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI (Mod3/6 Safe), RSI, Azimuth, M-Tilt & Directional E-Tilt")
+st.caption("Ericsson RAN Systems • Automatic Allocation for TAC, PCI (Mod3/6 Safe), RSI, Azimuth, M-Tilt & E-Tilt")
 st.markdown("---")
 
 # ==========================================
