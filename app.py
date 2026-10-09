@@ -128,7 +128,7 @@ col_left, col_right = st.columns([1, 2], gap="medium")
 # --- BÊN TRÁI: DOWLOAD FILE MẪU ---
 with col_left:
     st.markdown('<div class="section-title">📥 1. Tải Tệp Mẫu (Sample Files)</div>', unsafe_allow_html=True)
-    st.info("Tải các file định dạng chuẩn mẫu từ dự án để kiểm tra hệ thống:")
+    # st.info("Tải các file định dạng chuẩn mẫu:")
     
     sample_files = {
         "RIMS_Sample.csv": "File thông tin Trạm RIM hiện hữu",
@@ -152,7 +152,7 @@ with col_left:
 
 # --- BÊN PHẢI: UPLOAD FILE ĐẦU VÀO ---
 with col_right:
-    st.markdown('<div class="section-title">📤 2. Tải Dữ Liệu Đầu Vào (Input Upload)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">📤 2. Upload Dữ Liệu Đầu Vào (Input Upload)</div>', unsafe_allow_html=True)
     
     u1, u2, u3 = st.columns(3)
     with u1:
