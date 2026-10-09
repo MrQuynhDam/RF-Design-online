@@ -128,8 +128,7 @@ col_left, col_right = st.columns([1, 2], gap="medium")
 # --- BÊN TRÁI: DOWLOAD FILE MẪU ---
 with col_left:
     st.markdown('<div class="section-title">📥 1. Download Sample Files</div>', unsafe_allow_html=True)
-    st.info("Download sample files:")
-    
+        
     sample_files = {
         "RIMS_Sample.csv": "File thông tin Trạm RIM hiện hữu",
         "Config_Sample.csv": "File cấu hình Cell hiện hữu (TAC/PCI/RSI)",
