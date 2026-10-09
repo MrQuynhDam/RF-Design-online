@@ -262,38 +262,47 @@ def check_pci_group_validity(candidate_group, site_lon, site_lat, assigned_pci_l
     if len(assigned_pci_list) == 0:
         return True, 1e9
 
-    min_pci_dist = 1e9
     assigned_lons = np.degrees(np.arctan2(assigned_pci_list[:, 1], assigned_pci_list[:, 0]))
     assigned_lats = np.degrees(np.arcsin(assigned_pci_list[:, 2] / 6371000.0))
     assigned_pcis = assigned_pci_list[:, 3].astype(int)
 
+    # Tính khoảng cách tới tất cả các cell đã gán
     dists = haversine_np(site_lon, site_lat, assigned_lons, assigned_lats)
+
+    group_min_conflict_dist = 1e9
+    has_violation = False
 
     for pci_candidate in candidate_group:
         cand_mod3 = pci_candidate % 3
         cand_mod6 = pci_candidate % 6
 
+        # 1. Kiểm tra trùng PCI
         same_pci_mask = (assigned_pcis == pci_candidate)
         if np.any(same_pci_mask):
-            d = np.min(dists[same_pci_mask])
-            if d < min_pci_dist:
-                min_pci_dist = d
-            if d < pci_min_dist:
-                return False, min_pci_dist
+            d_pci = np.min(dists[same_pci_mask])
+            group_min_conflict_dist = min(group_min_conflict_dist, d_pci)
+            if d_pci < pci_min_dist:
+                has_violation = True
 
+        # 2. Kiểm tra Mod3
         same_mod3_mask = ((assigned_pcis % 3) == cand_mod3)
         if np.any(same_mod3_mask):
             d_mod3 = np.min(dists[same_mod3_mask])
+            group_min_conflict_dist = min(group_min_conflict_dist, d_mod3)
             if d_mod3 < mod3_min_dist:
-                return False, min_pci_dist
+                has_violation = True
 
+        # 3. Kiểm tra Mod6
         same_mod6_mask = ((assigned_pcis % 6) == cand_mod6)
         if np.any(same_mod6_mask):
             d_mod6 = np.min(dists[same_mod6_mask])
+            group_min_conflict_dist = min(group_min_conflict_dist, d_mod6)
             if d_mod6 < mod6_min_dist:
-                return False, min_pci_dist
+                has_violation = True
 
-    return True, min_pci_dist
+    # Nếu KHÔNG vi phạm bất kỳ tiêu chuẩn nào -> Hợp lệ 100% (Không bắn Cảnh báo nữa!)
+    is_valid = not has_violation
+    return is_valid, group_min_conflict_dist
 
 # ==========================================
 # 5. XỬ LÝ QUY HOẠCH & XUẤT KẾT QUẢ
